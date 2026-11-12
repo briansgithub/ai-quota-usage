@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <Chronometer
+        android:id="@+id/next_refresh_countdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:countDown="true"
+        android:format="next %s"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="#739A9A9A"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/next_refresh_static"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="next 00:00"
+        android:textColor="#739A9A9A"
+        android:textSize="11sp"
+        android:visibility="gone" />
+</LinearLayout>

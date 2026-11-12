@@ -1,0 +1,9 @@
+{
+  "current_period_start": "2026-10-30T13:00:00.000Z",
+  "next_reset_timestamp_utc": "2026-11-06T00:00:00.000Z",
+  "usage_percent": 65,
+  "has_available_usage": true,
+  "has_non_zero_included_limit": true,
+  "grok_plan_label": "Grok Bot",
+  "cursor_plan_name": "Pro"
+}

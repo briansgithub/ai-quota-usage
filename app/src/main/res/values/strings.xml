@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Usage Widget</string>
+    <string name="widget_name">Usage Widget</string>
+    <string name="widget_description">Cursor, Grok Bot, and Codex usage, grouped by product. Resize or scroll to see every limit.</string>
+    <string name="sign_in_again">Sign in again</string>
+    <string name="refresh">Refresh</string>
+    <string name="last_updated">Last updated</string>
+    <string name="diagnostics">Diagnostics</string>
+    <string name="copy_diagnostics">Copy diagnostics</string>
+    <string name="failure_notifications">Notify if a provider stays stale for over 2 hours</string>
+    <string name="notification_channel_name">Retrieval failures</string>
+    <string name="notification_channel_description">Alerts when Cursor, Grok Bot, or Codex usage cannot be refreshed.</string>
+    <string name="notification_channel_restored_name">Usage restored</string>
+    <string name="notification_channel_restored_description">Alerts when a 5-hour or weekly limit resets and usage is available again.</string>
+    <string name="notification_channel_pacing_name">Pacing alerts</string>
+    <string name="notification_channel_pacing_description">Reminders to start a 5-hour window and warnings when weekly usage would be left unused.</string>
+    <string name="notify_usage_restored">Notify when usage comes back</string>
+    <string name="notify_pacing_reminders">Pacing reminders to start a 5-hour window</string>
+    <string name="notify_pacing_missed">Missed-window and unused-usage alerts</string>
+    <string name="quiet_hours">Quiet hours (11 PM–8 AM New York)</string>
+    <string name="percent_per_window">Percent of weekly a 5-hour window can burn</string>
+</resources>

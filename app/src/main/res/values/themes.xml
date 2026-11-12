@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.UsageWidget" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#FF141414</item>
+        <item name="android:navigationBarColor">#FF141414</item>
+        <item name="android:windowBackground">#FF141414</item>
+        <item name="android:colorBackground">#FF141414</item>
+        <item name="android:textColor">#FFE8E8E8</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
