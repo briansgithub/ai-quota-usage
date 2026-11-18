@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Usage Widget</string>
     <string name="widget_name">Usage Widget</string>
-    <string name="widget_description">Cursor, Grok Bot, and Codex usage, grouped by product. Resize or scroll to see every limit.</string>
+    <string name="widget_description">Cursor, Grok Bot, Codex, and Claude usage, grouped by product. Resize or scroll to see every limit.</string>
     <string name="sign_in_again">Sign in again</string>
     <string name="refresh">Refresh</string>
     <string name="last_updated">Last updated</string>
@@ -9,7 +9,7 @@
     <string name="copy_diagnostics">Copy diagnostics</string>
     <string name="failure_notifications">Notify if a provider stays stale for over 2 hours</string>
     <string name="notification_channel_name">Retrieval failures</string>
-    <string name="notification_channel_description">Alerts when Cursor, Grok Bot, or Codex usage cannot be refreshed.</string>
+    <string name="notification_channel_description">Alerts when Cursor, Grok Bot, Codex, or Claude usage cannot be refreshed.</string>
     <string name="notification_channel_restored_name">Usage restored</string>
     <string name="notification_channel_restored_description">Alerts when a 5-hour or weekly limit resets and usage is available again.</string>
     <string name="notification_channel_pacing_name">Pacing alerts</string>
@@ -26,6 +26,8 @@
     <string name="quota_cursor_models">Cursor models quota</string>
     <string name="quota_codex_five">Codex 5-hour quota (off by default)</string>
     <string name="quota_codex_weekly">Codex weekly quota (off by default)</string>
+    <string name="quota_claude_five">Claude session quota</string>
+    <string name="quota_claude_weekly">Claude weekly quota</string>
     <string name="quota_thresholds">Remaining % thresholds</string>
     <string name="send_test_notification">Send test notification</string>
     <string name="settings">Settings</string>

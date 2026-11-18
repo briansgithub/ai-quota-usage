@@ -12,10 +12,10 @@ class UsageSectionsTest {
     private val weekResetMs = 1_793_404_800_000L
 
     @Test
-    fun emptySnapshotAlwaysHasThreeSoftwareSections() {
+    fun emptySnapshotAlwaysHasFourSoftwareSections() {
         val sections = UsageSections.from(UsageSnapshot.empty(0L))
         assertEquals(
-            listOf("Cursor", "Grok Bot", "Codex"),
+            listOf("Cursor", "Grok Bot", "Codex", "Claude"),
             sections.map { it.id.title }
         )
         assertEquals(ProviderId.CURSOR, sections[0].signInProvider)
@@ -25,6 +25,9 @@ class UsageSectionsTest {
         assertEquals(ProviderStatus.UNSIGNED, sections[1].status)
         assertEquals(ProviderStatus.UNSIGNED, sections[2].status)
         assertEquals(listOf("openai.five_hour", "openai.weekly"), sections[2].meters.map { it.id })
+        assertEquals(ProviderId.CLAUDE, sections[3].signInProvider)
+        assertEquals(ProviderStatus.UNSIGNED, sections[3].status)
+        assertEquals(listOf("claude.five_hour", "claude.weekly"), sections[3].meters.map { it.id })
     }
 
     @Test

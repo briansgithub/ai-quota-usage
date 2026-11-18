@@ -66,6 +66,24 @@ enum class QuotaRuleId(
         windowLabel = "weekly",
         defaultEnabled = false,
         notificationId = 6404
+    ),
+    CLAUDE_FIVE_HOUR(
+        wire = "claude.five_hour",
+        meterId = "claude.five_hour",
+        section = SoftwareSectionId.CLAUDE,
+        serviceLabel = "Claude",
+        windowLabel = "session",
+        defaultEnabled = true,
+        notificationId = 6405
+    ),
+    CLAUDE_WEEKLY(
+        wire = "claude.weekly",
+        meterId = "claude.weekly",
+        section = SoftwareSectionId.CLAUDE,
+        serviceLabel = "Claude",
+        windowLabel = "weekly",
+        defaultEnabled = true,
+        notificationId = 6406
     );
 
     companion object {
@@ -113,7 +131,16 @@ object QuotaThresholdEngine {
         title = TEST_TITLE,
         body = TEST_BODY,
         dedupeKey = "quota:test",
-        notificationId = 6499
+        notificationId = 6499,
+        section = SoftwareSectionId.GROK_BOT
+    )
+
+    /** One sample per service, so "Send test notification" previews every logo. */
+    fun testAlerts(): List<AlertToPost> = listOf(
+        testAlert(),
+        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Cursor: 20% models quota left (test)", "quota:test:cursor", 6496, SoftwareSectionId.CURSOR),
+        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Codex: 20% weekly quota left (test)", "quota:test:codex", 6497, SoftwareSectionId.CODEX),
+        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Claude: 20% session quota left (test)", "quota:test:claude", 6498, SoftwareSectionId.CLAUDE)
     )
 
     fun evaluate(
@@ -209,6 +236,7 @@ object QuotaThresholdEngine {
         title = TEST_TITLE,
         body = bodyFor(rule, threshold, resetsAtEpochMs),
         dedupeKey = "quota:${rule.wire}:$windowKey:$threshold",
-        notificationId = rule.notificationId
+        notificationId = rule.notificationId,
+        section = rule.section
     )
 }

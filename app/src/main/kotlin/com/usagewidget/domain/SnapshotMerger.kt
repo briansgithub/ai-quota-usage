@@ -1,6 +1,22 @@
 package com.usagewidget.domain
 
 object SnapshotMerger {
+    /** One provider's fetch this round. */
+    data class ProviderRound(val provider: ProviderId, val result: ProviderResult, val signedIn: Boolean)
+
+    fun sectionsOf(provider: ProviderId): List<SoftwareSectionId> = when (provider) {
+        ProviderId.CURSOR -> listOf(SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT)
+        ProviderId.OPENAI -> listOf(SoftwareSectionId.CODEX)
+        ProviderId.CLAUDE -> listOf(SoftwareSectionId.CLAUDE)
+    }
+
+    private fun providerOf(section: SoftwareSectionId): ProviderId = when (section) {
+        SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT -> ProviderId.CURSOR
+        SoftwareSectionId.CODEX -> ProviderId.OPENAI
+        SoftwareSectionId.CLAUDE -> ProviderId.CLAUDE
+    }
+
+    /** Cursor + OpenAI only; any other provider keeps its previous state. */
     fun merge(
         previous: UsageSnapshot,
         cursorResult: ProviderResult,
@@ -8,113 +24,84 @@ object SnapshotMerger {
         nowMs: Long,
         cursorSignedIn: Boolean,
         openaiSignedIn: Boolean
-    ): UsageSnapshot {
+    ): UsageSnapshot = merge(
+        previous = previous,
+        rounds = listOf(
+            ProviderRound(ProviderId.CURSOR, cursorResult, cursorSignedIn),
+            ProviderRound(ProviderId.OPENAI, openaiResult, openaiSignedIn)
+        ),
+        nowMs = nowMs
+    )
+
+    fun merge(previous: UsageSnapshot, rounds: List<ProviderRound>, nowMs: Long): UsageSnapshot {
         val prior = HealthSynthesis.hydrate(previous)
         val health = prior.sectionHealth.associateBy { it.sectionId }.toMutableMap()
         SoftwareSectionId.entries.forEach { id ->
             health.putIfAbsent(id.wireName, SectionHealth(id.wireName))
         }
 
-        val cursorMetersThisRound = metersFrom(cursorResult)
-        val openaiMetersThisRound = metersFrom(openaiResult)
-
+        val byProvider = rounds.associateBy { it.provider }
+        val metersThisRound = rounds.associate { it.provider to metersFrom(it.result) }
         val attempts = mutableListOf<FetchAttempt>()
-        attempts += attemptsOrSynthetic(
-            result = cursorResult,
-            sections = listOf(SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT),
-            signedIn = cursorSignedIn,
-            health = health,
-            nowMs = nowMs
-        )
-        attempts += attemptsOrSynthetic(
-            result = openaiResult,
-            sections = listOf(SoftwareSectionId.CODEX),
-            signedIn = openaiSignedIn,
-            health = health,
-            nowMs = nowMs
-        )
-
-        attempts.forEach { attempt ->
-            val section = runCatching { SoftwareSectionId.fromWire(attempt.sectionId) }.getOrNull() ?: return@forEach
-            val incoming = MeterIds.forSection(
-                section,
-                if (section == SoftwareSectionId.CODEX) openaiMetersThisRound else cursorMetersThisRound
-            )
-            val planLabel = when (section) {
-                SoftwareSectionId.CODEX -> snapshotOf(openaiResult)?.planLabel
-                else -> snapshotOf(cursorResult)?.planLabel
-            }
-            val signedIn = when (section) {
-                SoftwareSectionId.CODEX -> openaiSignedIn || attempt.outcomeEnum == FetchOutcome.AUTH_EXPIRED
-                else -> cursorSignedIn || attempt.outcomeEnum == FetchOutcome.AUTH_EXPIRED
-            }
-            val incomingManual = when (section) {
-                SoftwareSectionId.CODEX -> snapshotOf(openaiResult)?.manualResets
-                SoftwareSectionId.CURSOR -> snapshotOf(cursorResult)?.manualResets
-                SoftwareSectionId.GROK_BOT -> null
-            }
-            val incomingDiag = when (section) {
-                SoftwareSectionId.CODEX -> snapshotOf(openaiResult)?.diagnosticJson
-                SoftwareSectionId.CURSOR -> snapshotOf(cursorResult)?.diagnosticJson
-                SoftwareSectionId.GROK_BOT -> null
-            }
-            health[section.wireName] = applyAttempt(
-                previous = health.getValue(section.wireName),
-                attempt = attempt,
-                newMeters = incoming,
-                planLabel = planLabel,
-                signedIn = signedIn,
-                manualResets = incomingManual,
-                diagnosticJson = incomingDiag
+        rounds.forEach { round ->
+            attempts += attemptsOrSynthetic(
+                result = round.result,
+                sections = sectionsOf(round.provider),
+                signedIn = round.signedIn,
+                health = health,
+                nowMs = nowMs
             )
         }
 
-        markUnsignedOrExpired(
-            signedIn = cursorSignedIn,
-            sections = listOf(SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT),
-            attempts = attempts,
-            health = health,
-            nowMs = nowMs
-        )
-        markUnsignedOrExpired(
-            signedIn = openaiSignedIn,
-            sections = listOf(SoftwareSectionId.CODEX),
-            attempts = attempts,
-            health = health,
-            nowMs = nowMs
-        )
+        attempts.forEach { attempt ->
+            val section = runCatching { SoftwareSectionId.fromWire(attempt.sectionId) }.getOrNull() ?: return@forEach
+            val round = byProvider[providerOf(section)] ?: return@forEach
+            val snap = snapshotOf(round.result)
+            health[section.wireName] = applyAttempt(
+                previous = health.getValue(section.wireName),
+                attempt = attempt,
+                newMeters = MeterIds.forSection(section, metersThisRound.getValue(round.provider)),
+                planLabel = snap?.planLabel,
+                signedIn = round.signedIn || attempt.outcomeEnum == FetchOutcome.AUTH_EXPIRED,
+                manualResets = when (section) {
+                    SoftwareSectionId.CODEX, SoftwareSectionId.CURSOR -> snap?.manualResets
+                    else -> null
+                },
+                diagnosticJson = if (section == SoftwareSectionId.GROK_BOT) null else snap?.diagnosticJson
+            )
+        }
 
-        val cursorHealth = health.getValue(SoftwareSectionId.CURSOR.wireName)
-        val grokHealth = health.getValue(SoftwareSectionId.GROK_BOT.wireName)
-        val codexHealth = health.getValue(SoftwareSectionId.CODEX.wireName)
+        rounds.forEach { round ->
+            markUnsignedOrExpired(
+                signedIn = round.signedIn,
+                sections = sectionsOf(round.provider),
+                attempts = attempts,
+                health = health,
+                nowMs = nowMs
+            )
+        }
 
-        val cursorProvider = rebuildProvider(
-            id = ProviderId.CURSOR,
-            previous = prior.provider(ProviderId.CURSOR),
-            thisRound = snapshotOf(cursorResult),
-            result = cursorResult,
-            signedIn = cursorSignedIn || cursorHealth.signedIn,
-            meters = cursorHealth.lastGoodMeters + grokHealth.lastGoodMeters,
-            planLabel = cursorHealth.lastGoodPlanLabel,
-            manualResets = cursorHealth.lastGoodManualResets,
-            diagnosticJson = cursorHealth.lastGoodDiagnosticJson
-        )
-        val openaiProvider = rebuildProvider(
-            id = ProviderId.OPENAI,
-            previous = prior.provider(ProviderId.OPENAI),
-            thisRound = snapshotOf(openaiResult),
-            result = openaiResult,
-            signedIn = openaiSignedIn || codexHealth.signedIn,
-            meters = codexHealth.lastGoodMeters,
-            planLabel = codexHealth.lastGoodPlanLabel,
-            manualResets = codexHealth.lastGoodManualResets,
-            diagnosticJson = codexHealth.lastGoodDiagnosticJson
-        )
+        val providers = ProviderId.entries.mapNotNull { id ->
+            val round = byProvider[id] ?: return@mapNotNull prior.provider(id)
+            val sections = sectionsOf(id)
+            val primary = health.getValue(sections.first().wireName)
+            rebuildProvider(
+                id = id,
+                previous = prior.provider(id),
+                thisRound = snapshotOf(round.result),
+                result = round.result,
+                signedIn = round.signedIn || primary.signedIn,
+                meters = sections.flatMap { health.getValue(it.wireName).lastGoodMeters },
+                planLabel = primary.lastGoodPlanLabel,
+                manualResets = primary.lastGoodManualResets,
+                diagnosticJson = primary.lastGoodDiagnosticJson
+            )
+        }
 
         val log = (prior.attemptLog + attempts).takeLast(StalePolicy.ATTEMPT_LOG_LIMIT)
         return UsageSnapshot(
             fetchedAtEpochMs = nowMs,
-            providers = listOf(cursorProvider, openaiProvider),
+            providers = providers,
             sectionHealth = SoftwareSectionId.entries.map { health.getValue(it.wireName) },
             attemptLog = log
         )
@@ -152,10 +139,7 @@ object SnapshotMerger {
     }
 
     fun clearForSignOut(previous: UsageSnapshot, provider: ProviderId): UsageSnapshot {
-        val sections = when (provider) {
-            ProviderId.CURSOR -> listOf(SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT)
-            ProviderId.OPENAI -> listOf(SoftwareSectionId.CODEX)
-        }
+        val sections = sectionsOf(provider)
         val health = previous.sectionHealth.toMutableList()
         SoftwareSectionId.entries.forEach { id ->
             if (health.none { it.sectionId == id.wireName }) {

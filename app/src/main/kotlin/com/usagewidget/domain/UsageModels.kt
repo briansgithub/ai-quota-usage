@@ -4,7 +4,8 @@ import kotlinx.serialization.Serializable
 
 enum class ProviderId(val wireName: String, val displayName: String) {
     CURSOR("cursor", "Cursor"),
-    OPENAI("openai", "ChatGPT / Codex");
+    OPENAI("openai", "ChatGPT / Codex"),
+    CLAUDE("claude", "Claude");
 
     companion object {
         fun fromWire(value: String): ProviderId =
@@ -15,7 +16,11 @@ enum class ProviderId(val wireName: String, val displayName: String) {
 
 data class DisplayPreferences(
     val showCursorOnDemand: Boolean = true,
-    val showGrokOnDemand: Boolean = true
+    val showGrokOnDemand: Boolean = true,
+    /** Meter ids hidden on the home-screen widget (see [WidgetBars]). */
+    val hiddenWidgetBars: Set<String> = emptySet(),
+    /** Hide bars with no quota left, in the app and on the widget (see [UsageRemaining]). */
+    val onlyUsageRemaining: Boolean = false
 )
 
 enum class ProviderStatus {
@@ -118,6 +123,11 @@ data class UsageSnapshot(
                     ProviderSnapshot(
                         id = ProviderId.OPENAI.wireName,
                         displayName = ProviderId.OPENAI.displayName,
+                        status = ProviderStatus.UNSIGNED.name
+                    ),
+                    ProviderSnapshot(
+                        id = ProviderId.CLAUDE.wireName,
+                        displayName = ProviderId.CLAUDE.displayName,
                         status = ProviderStatus.UNSIGNED.name
                     )
                 )

@@ -98,8 +98,26 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         repo.settings().quotaCodexWeeklyEnabled = enabled
     }
 
+    fun setQuotaClaudeFiveHourEnabled(enabled: Boolean) {
+        repo.settings().quotaClaudeFiveHourEnabled = enabled
+    }
+
+    fun setQuotaClaudeWeeklyEnabled(enabled: Boolean) {
+        repo.settings().quotaClaudeWeeklyEnabled = enabled
+    }
+
     fun setQuotaThresholdsCsv(csv: String) {
         repo.settings().quotaThresholdsCsv = csv
+    }
+
+    fun setWidgetBarVisible(meterId: String, visible: Boolean) {
+        repo.settings().setWidgetBarVisible(meterId, visible)
+        pushWidget()
+    }
+
+    fun setOnlyUsageRemaining(enabled: Boolean) {
+        repo.settings().onlyUsageRemaining = enabled
+        pushWidget()
     }
 
     fun setShowCursorOnDemand(enabled: Boolean) {

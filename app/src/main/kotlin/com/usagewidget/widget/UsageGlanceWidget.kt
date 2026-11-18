@@ -52,6 +52,8 @@ import com.usagewidget.data.AppSettings
 import com.usagewidget.data.UsageRepository
 import com.usagewidget.domain.NyTimeAgo
 import com.usagewidget.domain.OnDemandDisplay
+import com.usagewidget.domain.UsageRemaining
+import com.usagewidget.domain.WidgetBars
 import com.usagewidget.domain.PaceUrgency
 import com.usagewidget.domain.PaceWindows
 import com.usagewidget.domain.PacingPlanner
@@ -121,10 +123,17 @@ private fun WidgetContent(
         }
     )
     val settings = AppSettings.get(context)
-    val sections = OnDemandDisplay.apply(
-        UsageSections.from(snapshot, now),
-        showCursor = settings.showCursorOnDemand,
-        showGrok = settings.showGrokOnDemand
+    val sections = UsageRemaining.apply(
+        WidgetBars.apply(
+            OnDemandDisplay.apply(
+                UsageSections.from(snapshot, now),
+                showCursor = settings.showCursorOnDemand,
+                showGrok = settings.showGrokOnDemand
+            ),
+            settings.hiddenWidgetBars
+        ),
+        enabled = settings.onlyUsageRemaining,
+        dropSpentCards = true
     )
     val anyStale = sections.any { it.stale.isStale }
     val rows = widgetRows(sections, includePace = !compact, percentPerWindow, now)
@@ -272,7 +281,7 @@ private fun widgetRows(
         }
         when (section.status) {
             ProviderStatus.NEEDS_SIGN_IN, ProviderStatus.UNSIGNED -> {
-                if (!hasData && section.id.title == "Codex") {
+                if (!hasData && (section.id.title == "Codex" || section.id.title == "Claude")) {
                     section.meters.forEach { rows += WidgetRow.Meter(it) }
                 }
                 rows += WidgetRow.SignIn(

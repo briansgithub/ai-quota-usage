@@ -260,4 +260,5 @@ private fun statusLine(provider: ProviderId, page: LoginPageState): String {
 private fun pasteHost(provider: ProviderId): String = when (provider) {
     ProviderId.CURSOR -> "cursor.com"
     ProviderId.OPENAI -> "chatgpt.com"
+    ProviderId.CLAUDE -> "claude.ai"
 }

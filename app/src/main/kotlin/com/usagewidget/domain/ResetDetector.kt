@@ -31,6 +31,8 @@ object ResetDetector {
     private val groups = listOf(
         "codex.five_hour",
         "codex.weekly",
+        "claude.five_hour",
+        "claude.weekly",
         "grok.weekly",
         "cursor.plan"
     )
@@ -87,6 +89,8 @@ object ResetDetector {
     fun notifyGroup(meterId: String): String? = when (meterId) {
         "openai.five_hour" -> "codex.five_hour"
         "openai.weekly" -> "codex.weekly"
+        "claude.five_hour" -> "claude.five_hour"
+        "claude.weekly" -> "claude.weekly"
         "cursor.grok_bot" -> "grok.weekly"
         "cursor.models", "cursor.plan_reset" -> "cursor.plan"
         else -> null
@@ -95,6 +99,8 @@ object ResetDetector {
     private fun meterIdsFor(group: String): List<String> = when (group) {
         "codex.five_hour" -> listOf("openai.five_hour")
         "codex.weekly" -> listOf("openai.weekly")
+        "claude.five_hour" -> listOf("claude.five_hour")
+        "claude.weekly" -> listOf("claude.weekly")
         "grok.weekly" -> listOf("cursor.grok_bot")
         "cursor.plan" -> listOf("cursor.models", "cursor.plan_reset")
         else -> emptyList()
@@ -103,6 +109,8 @@ object ResetDetector {
     private fun titleFor(group: String): String = when (group) {
         "codex.five_hour" -> "Codex 5-hour usage is back"
         "codex.weekly" -> "Codex weekly usage is back"
+        "claude.five_hour" -> "Claude session usage is back"
+        "claude.weekly" -> "Claude weekly usage is back"
         "grok.weekly" -> "Grok Bot weekly usage is back"
         "cursor.plan" -> "Cursor usage is back"
         else -> "Usage is back"
@@ -110,13 +118,14 @@ object ResetDetector {
 
     private fun serviceFor(group: String): String = when (group) {
         "codex.five_hour", "codex.weekly" -> "Codex"
+        "claude.five_hour", "claude.weekly" -> "Claude"
         "grok.weekly" -> "Grok Bot"
         "cursor.plan" -> "Cursor"
         else -> "Usage"
     }
 
     private fun kindFor(group: String): RestoredKind =
-        if (group == "codex.five_hour") RestoredKind.FIVE_HOUR else RestoredKind.WEEKLY
+        if (group == "codex.five_hour" || group == "claude.five_hour") RestoredKind.FIVE_HOUR else RestoredKind.WEEKLY
 
     private fun flatten(snapshot: UsageSnapshot): Map<String, UsageMeter> {
         val out = linkedMapOf<String, UsageMeter>()

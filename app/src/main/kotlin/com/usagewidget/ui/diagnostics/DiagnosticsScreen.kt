@@ -50,6 +50,7 @@ import com.usagewidget.BuildConfig
 import com.usagewidget.domain.DiagnosticsReport
 import com.usagewidget.domain.FetchAttempt
 import com.usagewidget.domain.HealthSynthesis
+import com.usagewidget.ui.settings.DisplaySettings
 import com.usagewidget.domain.QuotaRuleId
 import com.usagewidget.domain.SectionHealth
 import com.usagewidget.domain.SoftwareSectionId
@@ -81,7 +82,7 @@ fun DiagnosticsScreen(
         containerColor = CursorChrome,
         topBar = {
             TopAppBar(
-                title = { Text("Diagnostics") },
+                title = { Text("Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -112,21 +113,12 @@ fun DiagnosticsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Settings", style = MaterialTheme.typography.titleMedium, color = CursorText)
-                Text(stringResource(R.string.show_on_demand), color = CursorText, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Hides that dollar-cap bar. Included quota bars stay.",
-                    color = CursorMuted,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                SettingSwitch(
-                    label = stringResource(R.string.show_on_demand_cursor),
-                    checked = display.showCursorOnDemand,
-                    onCheckedChange = { viewModel.setShowCursorOnDemand(it) }
-                )
-                SettingSwitch(
-                    label = stringResource(R.string.show_on_demand_grok),
-                    checked = display.showGrokOnDemand,
-                    onCheckedChange = { viewModel.setShowGrokOnDemand(it) }
+                DisplaySettings(
+                    display = display,
+                    onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
+                    onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
+                    onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+                    onWidgetBar = viewModel::setWidgetBarVisible
                 )
                 HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
                 Text(
@@ -205,6 +197,16 @@ fun DiagnosticsScreen(
                     label = stringResource(R.string.quota_codex_weekly),
                     checked = QuotaRuleId.CODEX_WEEKLY.wire in quota.enabledRules,
                     onCheckedChange = { viewModel.setQuotaCodexWeeklyEnabled(it) }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_claude_five),
+                    checked = QuotaRuleId.CLAUDE_FIVE_HOUR.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaClaudeFiveHourEnabled(it) }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_claude_weekly),
+                    checked = QuotaRuleId.CLAUDE_WEEKLY.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaClaudeWeeklyEnabled(it) }
                 )
                 var thresholdsCsv by rememberSaveable(quota.thresholdsCsv) { mutableStateOf(quota.thresholdsCsv) }
                 OutlinedTextField(

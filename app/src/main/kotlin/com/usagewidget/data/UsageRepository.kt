@@ -16,6 +16,9 @@ import com.usagewidget.net.AuthenticatedHttp
 import com.usagewidget.net.FetchErrorClassifier
 import com.usagewidget.providers.cursor.CursorEndpoints
 import com.usagewidget.providers.cursor.CursorUsageClient
+import com.usagewidget.providers.claude.ClaudeEndpoints
+import com.usagewidget.providers.claude.ClaudeUsageClient
+import com.usagewidget.providers.claude.ClaudeUsageParser
 import com.usagewidget.providers.openai.OpenAiEndpoints
 import com.usagewidget.providers.openai.OpenAiUsageClient
 import com.usagewidget.refresh.StaleNotifier
@@ -38,6 +41,7 @@ class UsageRepository private constructor(private val context: Context) {
     private val http = AuthenticatedHttp(cookies)
     private val cursor = CursorUsageClient(http, cookies)
     private val openai = OpenAiUsageClient(http, cookies)
+    private val claude = ClaudeUsageClient(http, cookies)
     private val extractor = HiddenWebViewExtractor(context.applicationContext)
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -67,13 +71,15 @@ class UsageRepository private constructor(private val context: Context) {
             val previous = _snapshot.value
             val cursorResult = fetchProvider(ProviderId.CURSOR, allowHtmlFallback, now)
             val openaiResult = fetchProvider(ProviderId.OPENAI, allowHtmlFallback, now)
+            val claudeResult = fetchProvider(ProviderId.CLAUDE, allowHtmlFallback, now)
             val combined = SnapshotMerger.merge(
                 previous = previous,
-                cursorResult = cursorResult,
-                openaiResult = openaiResult,
-                nowMs = now,
-                cursorSignedIn = cookies.hasSession(ProviderId.CURSOR),
-                openaiSignedIn = cookies.hasSession(ProviderId.OPENAI)
+                rounds = listOf(
+                    SnapshotMerger.ProviderRound(ProviderId.CURSOR, cursorResult, cookies.hasSession(ProviderId.CURSOR)),
+                    SnapshotMerger.ProviderRound(ProviderId.OPENAI, openaiResult, cookies.hasSession(ProviderId.OPENAI)),
+                    SnapshotMerger.ProviderRound(ProviderId.CLAUDE, claudeResult, cookies.hasSession(ProviderId.CLAUDE))
+                ),
+                nowMs = now
             )
             persist(combined)
             _snapshot.value = combined
@@ -111,6 +117,7 @@ class UsageRepository private constructor(private val context: Context) {
             when (provider) {
                 ProviderId.CURSOR -> cursor.fetch(now)
                 ProviderId.OPENAI -> openai.fetch(now)
+                ProviderId.CLAUDE -> claude.fetch(now)
             }
         }
         if (result is ProviderResult.Success || result is ProviderResult.NeedsSignIn) {
@@ -118,6 +125,27 @@ class UsageRepository private constructor(private val context: Context) {
         }
         if (result is ProviderResult.Failure && allowHtmlFallback && cookies.hasSession(provider)) {
             return runCatching {
+                if (provider == ProviderId.CLAUDE) {
+                    val text = extractor.readClaudeUsageJson()
+                    return@runCatching if (ClaudeUsageParser.isAuthErrorBody(text)) {
+                        ProviderResult.NeedsSignIn(
+                            message = "Claude session expired. Sign in again.",
+                            attempts = result.attempts + FetchAttempt.of(
+                                atEpochMs = now,
+                                sectionId = SoftwareSectionId.CLAUDE,
+                                outcome = FetchOutcome.AUTH_EXPIRED,
+                                message = "claude.ai rejected the session",
+                                endpoint = ClaudeEndpoints.USAGE_PAGE,
+                                source = "webview"
+                            )
+                        )
+                    } else {
+                        ProviderResult.Success(
+                            claude.snapshotFromWebJson(text, now),
+                            attempts = result.attempts + claude.webAttempt(now)
+                        )
+                    }
+                }
                 val text = extractor.extractPageText(provider)
                 when (provider) {
                     ProviderId.CURSOR -> {
@@ -134,6 +162,7 @@ class UsageRepository private constructor(private val context: Context) {
                             attempts = result.attempts + openai.htmlAttempt(now)
                         )
                     }
+                    ProviderId.CLAUDE -> error("unreachable")
                 }
             }.getOrElse { htmlError ->
                 val htmlAttempts = htmlFallbackAttempts(provider, htmlError, now)
@@ -165,6 +194,11 @@ class UsageRepository private constructor(private val context: Context) {
             ProviderId.OPENAI -> listOf(
                 FetchErrorClassifier.attempt(
                     error, SoftwareSectionId.CODEX, OpenAiEndpoints.USAGE_PAGE, now, source = "html"
+                )
+            )
+            ProviderId.CLAUDE -> listOf(
+                FetchErrorClassifier.attempt(
+                    error, SoftwareSectionId.CLAUDE, ClaudeEndpoints.USAGE_PAGE, now, source = "webview"
                 )
             )
         }

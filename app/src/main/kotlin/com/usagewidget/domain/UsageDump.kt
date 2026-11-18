@@ -58,6 +58,13 @@ object UsageDump {
         return obj.toString()
     }
 
+    fun claudePayload(usageRaw: String?): String {
+        val obj = buildJsonObject {
+            usageRaw?.let { put("claudeUsage", redactElement(it)) }
+        }
+        return obj.toString()
+    }
+
     fun openaiPayload(whamRaw: String?, resetCreditsRaw: String? = null): String {
         val obj = buildJsonObject {
             whamRaw?.let { put("whamUsage", redactElement(it)) }
@@ -108,7 +115,7 @@ object UsageDump {
     private val jwt = Regex("""eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+""")
     private val bearer = Regex("""(?i)Bearer\s+[A-Za-z0-9._\-+=/]+""")
     private val cookiePair = Regex(
-        """(?i)(WorkosCursorSessionToken|__Secure-next-auth\.session-token(?:\.\d+)?|Cookie|Authorization)\s*[:=]\s*\S+"""
+        """(?i)(WorkosCursorSessionToken|__Secure-next-auth\.session-token(?:\.\d+)?|sessionKey|Cookie|Authorization)\s*[:=]\s*\S+"""
     )
     private val account = Regex("""acct_[A-Za-z0-9]+""")
 }

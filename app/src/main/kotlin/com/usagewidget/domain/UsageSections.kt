@@ -1,9 +1,12 @@
 package com.usagewidget.domain
 
+import com.usagewidget.providers.claude.ClaudeMeterIds
+
 enum class SoftwareSectionId(val title: String, val wireName: String) {
     CURSOR("Cursor", "cursor"),
     GROK_BOT("Grok Bot", "grok_bot"),
-    CODEX("Codex", "codex");
+    CODEX("Codex", "codex"),
+    CLAUDE("Claude", "claude");
 
     companion object {
         fun fromWire(value: String): SoftwareSectionId =
@@ -54,10 +57,12 @@ object UsageSections {
         val hydrated = HealthSynthesis.hydrate(snapshot)
         val cursor = hydrated.provider(ProviderId.CURSOR)
         val openai = hydrated.provider(ProviderId.OPENAI)
+        val claude = hydrated.provider(ProviderId.CLAUDE)
         return listOf(
             cursorSection(cursor, hydrated.health(SoftwareSectionId.CURSOR), nowMs),
             grokSection(cursor, hydrated.health(SoftwareSectionId.GROK_BOT), nowMs),
-            codexSection(openai, hydrated.health(SoftwareSectionId.CODEX), nowMs)
+            codexSection(openai, hydrated.health(SoftwareSectionId.CODEX), nowMs),
+            claudeSection(claude, hydrated.health(SoftwareSectionId.CLAUDE), nowMs)
         )
     }
 
@@ -185,6 +190,34 @@ object UsageSections {
             health = health,
             stale = stale,
             manualResets = openai?.manualResets ?: health.lastGoodManualResets
+        )
+    }
+
+    private fun claudeSection(
+        claude: ProviderSnapshot?,
+        health: SectionHealth,
+        nowMs: Long
+    ): SoftwareSection {
+        val status = claude?.providerStatus ?: ProviderStatus.UNSIGNED
+        val sourceMeters = claude?.meters.orEmpty().ifEmpty {
+            if (health.outcomeEnum == FetchOutcome.SUCCESS) emptyList() else health.lastGoodMeters
+        }
+        val meters = MeterIds.claudeMeters(sourceMeters).ifEmpty {
+            listOf(
+                placeholder(ClaudeMeterIds.FIVE_HOUR, "Session"),
+                placeholder(ClaudeMeterIds.WEEKLY, "Weekly")
+            )
+        }
+        val stale = health.staleView(nowMs)
+        return SoftwareSection(
+            id = SoftwareSectionId.CLAUDE,
+            signInProvider = ProviderId.CLAUDE,
+            status = status,
+            subtitle = claude?.planLabel ?: health.lastGoodPlanLabel,
+            error = stale.shortReason ?: claude?.error,
+            meters = meters,
+            health = health,
+            stale = stale
         )
     }
 

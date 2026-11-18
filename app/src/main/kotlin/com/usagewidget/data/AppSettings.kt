@@ -165,6 +165,20 @@ class AppSettings private constructor(context: Context) {
             publishQuota()
         }
 
+    var quotaClaudeFiveHourEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_CLAUDE_FIVE, QuotaRuleId.CLAUDE_FIVE_HOUR.defaultEnabled)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_CLAUDE_FIVE, value).apply()
+            publishQuota()
+        }
+
+    var quotaClaudeWeeklyEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_CLAUDE_WEEKLY, QuotaRuleId.CLAUDE_WEEKLY.defaultEnabled)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_CLAUDE_WEEKLY, value).apply()
+            publishQuota()
+        }
+
     var showCursorOnDemand: Boolean
         get() = prefs.getBoolean(KEY_SHOW_CURSOR_ON_DEMAND, true)
         set(value) {
@@ -178,6 +192,25 @@ class AppSettings private constructor(context: Context) {
             prefs.edit().putBoolean(KEY_SHOW_GROK_ON_DEMAND, value).apply()
             publishDisplay()
         }
+
+    /** Hide bars whose weekly/monthly quota is spent (see [com.usagewidget.domain.UsageRemaining]). */
+    var onlyUsageRemaining: Boolean
+        get() = prefs.getBoolean(KEY_ONLY_USAGE_REMAINING, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_ONLY_USAGE_REMAINING, value).apply()
+            publishDisplay()
+        }
+
+    val hiddenWidgetBars: Set<String>
+        get() = prefs.getStringSet(KEY_HIDDEN_WIDGET_BARS, emptySet())?.toSet().orEmpty()
+
+    fun setWidgetBarVisible(meterId: String, visible: Boolean) {
+        val current = hiddenWidgetBars
+        val next = if (visible) current - meterId else current + meterId
+        if (next == current) return
+        prefs.edit().putStringSet(KEY_HIDDEN_WIDGET_BARS, next).apply()
+        publishDisplay()
+    }
 
     fun wantsNotificationPermission(): Boolean =
         failureNotificationsEnabled || notifyUsageRestored || notifyPacingReminders ||
@@ -226,6 +259,8 @@ class AppSettings private constructor(context: Context) {
             if (quotaCursorModelsEnabled) add(QuotaRuleId.CURSOR_MODELS.wire)
             if (quotaCodexFiveHourEnabled) add(QuotaRuleId.CODEX_FIVE_HOUR.wire)
             if (quotaCodexWeeklyEnabled) add(QuotaRuleId.CODEX_WEEKLY.wire)
+            if (quotaClaudeFiveHourEnabled) add(QuotaRuleId.CLAUDE_FIVE_HOUR.wire)
+            if (quotaClaudeWeeklyEnabled) add(QuotaRuleId.CLAUDE_WEEKLY.wire)
         }
         return QuotaThresholdPreferences(
             masterEnabled = quotaAlertsEnabled,
@@ -244,7 +279,9 @@ class AppSettings private constructor(context: Context) {
 
     private fun readDisplayPreferences(): DisplayPreferences = DisplayPreferences(
         showCursorOnDemand = showCursorOnDemand,
-        showGrokOnDemand = showGrokOnDemand
+        showGrokOnDemand = showGrokOnDemand,
+        hiddenWidgetBars = hiddenWidgetBars,
+        onlyUsageRemaining = onlyUsageRemaining
     )
 
     private fun publishDisplay() {
@@ -278,6 +315,10 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_QUOTA_MODELS = "quota_cursor_models_enabled"
         private const val KEY_QUOTA_CODEX_FIVE = "quota_codex_five_hour_enabled"
         private const val KEY_QUOTA_CODEX_WEEKLY = "quota_codex_weekly_enabled"
+        private const val KEY_HIDDEN_WIDGET_BARS = "hidden_widget_bars"
+        private const val KEY_ONLY_USAGE_REMAINING = "only_usage_remaining"
+        private const val KEY_QUOTA_CLAUDE_FIVE = "quota_claude_five_hour_enabled"
+        private const val KEY_QUOTA_CLAUDE_WEEKLY = "quota_claude_weekly_enabled"
         private const val KEY_QUOTA_STATES = "quota_fired_states"
         private const val KEY_SHOW_CURSOR_ON_DEMAND = "show_cursor_on_demand"
         private const val KEY_SHOW_GROK_ON_DEMAND = "show_grok_on_demand"

@@ -48,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,7 +61,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.usagewidget.R
 import com.usagewidget.domain.DisplayPreferences
 import com.usagewidget.domain.NyTimeAgo
+import androidx.compose.foundation.layout.heightIn
 import com.usagewidget.domain.OnDemandDisplay
+import com.usagewidget.domain.UsageRemaining
+import com.usagewidget.ui.settings.DisplaySettings
 import com.usagewidget.domain.PaceWindows
 import com.usagewidget.domain.PacingPlanner
 import com.usagewidget.domain.PaceUrgency
@@ -113,6 +117,8 @@ fun DashboardScreen(
             display = display,
             onCursor = viewModel::setShowCursorOnDemand,
             onGrok = viewModel::setShowGrokOnDemand,
+            onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+            onWidgetBar = viewModel::setWidgetBarVisible,
             onDismiss = { settingsOpen = false }
         )
     }
@@ -123,14 +129,13 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("Usage") },
                 actions = {
-                    IconButton(onClick = { settingsOpen = true }) {
-                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.settings))
-                    }
-                    IconButton(onClick = onOpenDiagnostics) {
-                        Icon(Icons.Outlined.BugReport, contentDescription = "Diagnostics")
-                    }
+                    // Refresh, then Settings at the far right. Settings opens the one full
+                    // settings screen (diagnostics are at its bottom).
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
+                    }
+                    IconButton(onClick = onOpenDiagnostics) {
+                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.settings))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -165,40 +170,38 @@ private fun OnDemandSettingsDialog(
     display: DisplayPreferences,
     onCursor: (Boolean) -> Unit,
     onGrok: (Boolean) -> Unit,
+    onOnlyUsageRemaining: (Boolean) -> Unit,
+    onWidgetBar: (String, Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    // Wider than the platform default so each service's bars fit on one row.
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = CursorSurface
+            shape = RoundedCornerShape(20.dp),
+            color = CursorSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp)
+                .heightIn(max = 720.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp)) {
                 Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, color = CursorText)
-                Text(stringResource(R.string.show_on_demand), color = CursorText, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Hides that dollar-cap bar. Included quota bars stay.",
-                    color = CursorMuted,
-                    style = MaterialTheme.typography.bodySmall
+                DisplaySettings(
+                    display = display,
+                    onShowCursorOnDemand = onCursor,
+                    onShowGrokOnDemand = onGrok,
+                    onOnlyUsageRemaining = onOnlyUsageRemaining,
+                    onWidgetBar = onWidgetBar,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 12.dp)
                 )
-                OnDemandSwitch(stringResource(R.string.show_on_demand_cursor), display.showCursorOnDemand, onCursor)
-                OnDemandSwitch(stringResource(R.string.show_on_demand_grok), display.showGrokOnDemand, onGrok)
-                HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
                 TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
                     Text("Done")
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun OnDemandSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = CursorText, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -212,10 +215,14 @@ private fun DashboardBody(
     onSignOut: (ProviderId) -> Unit
 ) {
     val now = System.currentTimeMillis()
-    val sections = OnDemandDisplay.apply(
-        UsageSections.from(snapshot, now),
-        showCursor = display.showCursorOnDemand,
-        showGrok = display.showGrokOnDemand
+    val sections = UsageRemaining.apply(
+        OnDemandDisplay.apply(
+            UsageSections.from(snapshot, now),
+            showCursor = display.showCursorOnDemand,
+            showGrok = display.showGrokOnDemand
+        ),
+        enabled = display.onlyUsageRemaining,
+        dropSpentCards = false
     )
     val anyStale = sections.any { it.stale.isStale }
     Column(
@@ -512,6 +519,7 @@ private fun staleHeaderColor(severity: StaleSeverity, isStale: Boolean): Color {
 private fun signInLabel(section: SoftwareSection): String = when (section.id) {
     SoftwareSectionId.GROK_BOT -> "Sign in to Cursor"
     SoftwareSectionId.CODEX -> "Sign in to ChatGPT"
+    SoftwareSectionId.CLAUDE -> "Sign in to Claude"
     SoftwareSectionId.CURSOR -> "Sign in"
 }
 

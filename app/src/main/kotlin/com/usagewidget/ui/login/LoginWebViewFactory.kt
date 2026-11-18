@@ -19,6 +19,7 @@ import androidx.webkit.WebViewFeature
 import com.usagewidget.auth.SecureCookieStore
 import com.usagewidget.domain.ProviderId
 import com.usagewidget.providers.cursor.CursorEndpoints
+import com.usagewidget.providers.claude.ClaudeEndpoints
 import com.usagewidget.providers.openai.OpenAiEndpoints
 
 data class LoginPageState(
@@ -214,11 +215,13 @@ fun applyLoginSettings(webView: WebView) {
 fun loginStartUrl(provider: ProviderId): String = when (provider) {
     ProviderId.CURSOR -> CursorEndpoints.LOGIN_PAGE
     ProviderId.OPENAI -> OpenAiEndpoints.LOGIN_PAGE
+    ProviderId.CLAUDE -> ClaudeEndpoints.LOGIN_PAGE
 }
 
 fun loginFallbackUrl(provider: ProviderId): String = when (provider) {
     ProviderId.CURSOR -> CursorEndpoints.LOGIN_PAGE
     ProviderId.OPENAI -> OpenAiEndpoints.LOGIN_FALLBACK
+    ProviderId.CLAUDE -> ClaudeEndpoints.LOGIN_PAGE
 }
 
 fun landedOnProviderHome(provider: ProviderId, url: String): Boolean {
@@ -234,6 +237,11 @@ fun landedOnProviderHome(provider: ProviderId, url: String): Boolean {
                 !lower.contains("/auth") &&
                 !lower.contains("login") &&
                 !lower.contains("log-in")
+        ProviderId.CLAUDE ->
+            lower.contains("claude.ai") &&
+                !lower.contains("/login") &&
+                !lower.contains("/magic-link") &&
+                !lower.contains("/oauth")
     }
 }
 

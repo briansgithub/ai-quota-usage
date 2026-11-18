@@ -280,6 +280,22 @@ object PacingPlanner {
                     sectionId = section.id.wireName
                 )
             }
+            SoftwareSectionId.CLAUDE -> {
+                val five = section.meters.find { it.id == "claude.five_hour" }
+                val weekly = section.meters.find { it.id == "claude.weekly" }
+                val remaining = weekly.remainingAmount() ?: return null
+                val resetAt = weekly?.resetsAtEpochMs ?: return null
+                planFiveAndWeekly(
+                    weeklyRemaining = remaining,
+                    weeklyResetEpochMs = resetAt,
+                    fiveHourRemaining = five.remainingAmount(),
+                    fiveHourResetEpochMs = five?.resetsAtEpochMs,
+                    nowMs = nowMs,
+                    percentPerWindow = percentPerWindow,
+                    manuals = emptyList(),
+                    sectionId = section.id.wireName
+                )
+            }
             SoftwareSectionId.GROK_BOT -> {
                 val meter = section.meters.find { it.id == "cursor.grok_bot" }
                     ?: section.meters.firstOrNull()

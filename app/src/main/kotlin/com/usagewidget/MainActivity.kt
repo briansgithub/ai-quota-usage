@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
         maybeSendTestNotification(intent)
         setContent {
             UsageWidgetTheme {
-                var diagnostics by rememberSaveable { mutableStateOf(openDiagnostics) }
+                var diagnostics by rememberSaveable { mutableStateOf(openDiagnostics || openSettings) }
                 if (diagnostics) {
                     DiagnosticsScreen(
                         viewModel = viewModel,
@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
                         viewModel = viewModel,
                         onSignIn = { provider -> startActivity(LoginActivity.intent(this, provider)) },
                         onOpenDiagnostics = { diagnostics = true },
-                        openSettings = openSettings
+                        openSettings = false
                     )
                 }
             }

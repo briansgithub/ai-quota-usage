@@ -21,7 +21,9 @@ data class AlertToPost(
     val title: String,
     val body: String,
     val dedupeKey: String,
-    val notificationId: Int
+    val notificationId: Int,
+    /** Service the alert is about; picks the notification's logo icon. */
+    val section: SoftwareSectionId? = null
 )
 
 data class ScheduledWake(
@@ -108,6 +110,8 @@ object UsageAlertEngine {
         val body = when (event.group) {
             "codex.five_hour" -> "Codex 5-hour limit has reset ($remaining)."
             "codex.weekly" -> "Codex weekly limit has reset ($remaining)."
+            "claude.five_hour" -> "Claude session limit has reset ($remaining)."
+            "claude.weekly" -> "Claude weekly limit has reset ($remaining)."
             "grok.weekly" -> "Grok Bot weekly limit has reset ($remaining)."
             "cursor.plan" -> "Cursor plan usage has reset ($remaining)."
             else -> "${event.serviceLabel} usage has reset ($remaining)."
@@ -117,7 +121,8 @@ object UsageAlertEngine {
             title = event.title,
             body = body,
             dedupeKey = event.dedupeKey,
-            notificationId = notificationId(AlertChannel.RESTORED, event.dedupeKey)
+            notificationId = notificationId(AlertChannel.RESTORED, event.dedupeKey),
+            section = sectionForGroup(event.group)
         )
     }
 
@@ -220,7 +225,8 @@ object UsageAlertEngine {
                 )
             }
         }
-        return alerts
+        val section = runCatching { SoftwareSectionId.fromWire(result.sectionId) }.getOrNull()
+        return alerts.map { it.copy(section = section) }
     }
 
     private fun resetWakes(current: UsageSnapshot, nowMs: Long): List<ScheduledWake> {
@@ -272,6 +278,14 @@ object UsageAlertEngine {
     fun notificationId(channel: AlertChannel, key: String): Int {
         val base = if (channel == AlertChannel.RESTORED) 4200 else 5300
         return base + (key.hashCode() and 0x3FF)
+    }
+
+    private fun sectionForGroup(group: String): SoftwareSectionId? = when (group.substringBefore('.')) {
+        "codex" -> SoftwareSectionId.CODEX
+        "claude" -> SoftwareSectionId.CLAUDE
+        "grok" -> SoftwareSectionId.GROK_BOT
+        "cursor" -> SoftwareSectionId.CURSOR
+        else -> null
     }
 
     private fun displayName(sectionId: String): String =

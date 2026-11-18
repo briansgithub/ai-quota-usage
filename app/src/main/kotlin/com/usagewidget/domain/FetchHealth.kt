@@ -200,11 +200,15 @@ object MeterIds {
     fun codexMeters(meters: List<UsageMeter>): List<UsageMeter> =
         meters.filter { it.id.startsWith("openai.") }
 
+    fun claudeMeters(meters: List<UsageMeter>): List<UsageMeter> =
+        meters.filter { it.id.startsWith("claude.") }
+
     fun forSection(sectionId: SoftwareSectionId, meters: List<UsageMeter>): List<UsageMeter> =
         when (sectionId) {
             SoftwareSectionId.CURSOR -> cursorMeters(meters)
             SoftwareSectionId.GROK_BOT -> grokMeters(meters)
             SoftwareSectionId.CODEX -> codexMeters(meters)
+            SoftwareSectionId.CLAUDE -> claudeMeters(meters)
         }
 }
 
@@ -213,11 +217,13 @@ object HealthSynthesis {
         if (snapshot.sectionHealth.isNotEmpty()) return snapshot
         val cursor = snapshot.provider(ProviderId.CURSOR)
         val openai = snapshot.provider(ProviderId.OPENAI)
+        val claude = snapshot.provider(ProviderId.CLAUDE)
         val at = snapshot.fetchedAtEpochMs
         val health = listOf(
             synthesized(SoftwareSectionId.CURSOR, cursor, MeterIds.cursorMeters(cursor?.meters.orEmpty()), at),
             synthesized(SoftwareSectionId.GROK_BOT, cursor, MeterIds.grokMeters(cursor?.meters.orEmpty()), at),
-            synthesized(SoftwareSectionId.CODEX, openai, MeterIds.codexMeters(openai?.meters.orEmpty()), at)
+            synthesized(SoftwareSectionId.CODEX, openai, MeterIds.codexMeters(openai?.meters.orEmpty()), at),
+            synthesized(SoftwareSectionId.CLAUDE, claude, MeterIds.claudeMeters(claude?.meters.orEmpty()), at)
         )
         return snapshot.copy(sectionHealth = health)
     }

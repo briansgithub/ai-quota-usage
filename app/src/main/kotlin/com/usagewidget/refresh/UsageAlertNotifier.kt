@@ -17,6 +17,7 @@ import com.usagewidget.domain.AlertChannel
 import com.usagewidget.domain.AlertToPost
 import com.usagewidget.domain.QuietHours
 import com.usagewidget.domain.QuotaThresholdEngine
+import com.usagewidget.domain.SoftwareSectionId
 import com.usagewidget.domain.UsageAlertEngine
 import com.usagewidget.domain.UsageSnapshot
 
@@ -62,7 +63,7 @@ class UsageAlertNotifier(
     fun postTest() {
         ensureChannels()
         if (!hasPermission()) return
-        post(QuotaThresholdEngine.testAlert())
+        QuotaThresholdEngine.testAlerts().forEach { post(it) }
     }
 
     private fun post(alert: AlertToPost) {
@@ -80,7 +81,7 @@ class UsageAlertNotifier(
             AlertChannel.PACING -> CHANNEL_PACING
             AlertChannel.QUOTA -> CHANNEL_QUOTA
         }
-        val icon = when (alert.channel) {
+        val icon = alert.section?.let(NotificationIcons::forSection) ?: when (alert.channel) {
             AlertChannel.RESTORED -> android.R.drawable.stat_notify_sync
             AlertChannel.PACING -> android.R.drawable.ic_dialog_info
             AlertChannel.QUOTA -> android.R.drawable.ic_dialog_info
@@ -90,7 +91,7 @@ class UsageAlertNotifier(
             AlertChannel.PACING -> NotificationCompat.PRIORITY_HIGH
             AlertChannel.QUOTA -> NotificationCompat.PRIORITY_HIGH
         }
-        val notification = NotificationCompat.Builder(context, channelId)
+        val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(icon)
             .setContentTitle(alert.title)
             .setContentText(alert.body)
@@ -98,8 +99,30 @@ class UsageAlertNotifier(
             .setContentIntent(pending)
             .setAutoCancel(true)
             .setPriority(priority)
+        val section = alert.section
+        if (section != null) {
+            NotificationIcons.largeIcon(context, section)?.let { builder.setLargeIcon(it) }
+            // Group per service with a logo summary; otherwise Android bundles 4+ alerts
+            // under an auto-summary that shows the launcher icon as a white square.
+            builder.setGroup(NotificationIcons.groupKey(section))
+        }
+        val manager = NotificationManagerCompat.from(context)
+        manager.notify(alert.notificationId, builder.build())
+        if (section != null) postGroupSummary(section, channelId, pending)
+    }
+
+    private fun postGroupSummary(section: SoftwareSectionId, channelId: String, pending: PendingIntent) {
+        val summary = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(NotificationIcons.forSection(section))
+            .setContentTitle(section.title)
+            .setContentText("${section.title} usage alerts")
+            .setGroup(NotificationIcons.groupKey(section))
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setContentIntent(pending)
+            .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(alert.notificationId, notification)
+        NotificationManagerCompat.from(context).notify(NotificationIcons.summaryId(section), summary)
     }
 
     private fun hasPermission(): Boolean {

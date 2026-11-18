@@ -2,6 +2,7 @@ package com.usagewidget.auth
 
 import com.usagewidget.domain.ProviderId
 import com.usagewidget.providers.cursor.CursorEndpoints
+import com.usagewidget.providers.claude.ClaudeEndpoints
 import com.usagewidget.providers.openai.OpenAiEndpoints
 
 /**
@@ -26,5 +27,6 @@ object SessionPaste {
     fun defaultCookieName(provider: ProviderId): String = when (provider) {
         ProviderId.CURSOR -> CursorEndpoints.SESSION_COOKIE
         ProviderId.OPENAI -> OpenAiEndpoints.SESSION_COOKIE_PREFIX
+        ProviderId.CLAUDE -> ClaudeEndpoints.SESSION_COOKIE
     }
 }

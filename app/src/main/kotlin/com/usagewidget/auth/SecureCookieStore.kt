@@ -7,6 +7,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.usagewidget.domain.ProviderId
 import com.usagewidget.providers.cursor.CursorEndpoints
+import com.usagewidget.providers.claude.ClaudeEndpoints
 import com.usagewidget.providers.openai.OpenAiEndpoints
 import java.util.concurrent.ConcurrentHashMap
 
@@ -37,6 +38,12 @@ class SecureCookieStore private constructor(private val prefs: SharedPreferences
                 hostsFor(provider).any { header ->
                     cookieMap(header).keys.any {
                         it.startsWith(OpenAiEndpoints.SESSION_COOKIE_PREFIX, ignoreCase = true)
+                    }
+                }
+            ProviderId.CLAUDE ->
+                hostsFor(provider).any { header ->
+                    cookieMap(header).any { (k, v) ->
+                        k.equals(ClaudeEndpoints.SESSION_COOKIE, ignoreCase = true) && v.isNotBlank()
                     }
                 }
         }
@@ -132,6 +139,7 @@ class SecureCookieStore private constructor(private val prefs: SharedPreferences
     private fun providerHosts(provider: ProviderId): List<String> = when (provider) {
         ProviderId.CURSOR -> CursorEndpoints.cookieHosts
         ProviderId.OPENAI -> OpenAiEndpoints.cookieHosts
+        ProviderId.CLAUDE -> ClaudeEndpoints.cookieHosts
     }
 
     private fun cookieKey(host: String) = "cookie.$host"
