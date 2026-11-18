@@ -6,12 +6,60 @@ namespace UsageWidget.Tests;
 public class RefreshScheduleTest
 {
     [Fact]
-    public void NextIsLastPeriodicPlusFifteenMinutes()
+    public void NextIsLastPeriodicPlusFiveMinutes()
     {
         const long last = 1_000_000L;
         var next = RefreshSchedule.NextEpochMs(last, 0L, last + 1_000L);
         Assert.Equal(last + RefreshSchedule.IntervalMs, next);
-        Assert.Equal(15L * 60_000, RefreshSchedule.IntervalMs);
+        Assert.Equal(5L * 60_000, RefreshSchedule.IntervalMs);
+    }
+
+    [Fact]
+    public void HealthyDelayIsIntervalPlusBoundedJitter()
+    {
+        var rng = new Random(7);
+        for (var i = 0; i < 500; i++)
+        {
+            var delay = RefreshSchedule.DelayAfterRefreshMs(0, rng);
+            Assert.InRange(delay, RefreshSchedule.IntervalMs, RefreshSchedule.IntervalMs + RefreshSchedule.JitterMaxMs);
+        }
+    }
+
+    [Theory]
+    [InlineData(1, 10L * 60_000)]
+    [InlineData(2, 20L * 60_000)]
+    [InlineData(3, 30L * 60_000)]
+    [InlineData(9, 30L * 60_000)]
+    public void BackoffDoublesThenCapsAtThirtyMinutes(int streak, long expectedBaseMs)
+    {
+        var delay = RefreshSchedule.DelayAfterRefreshMs(streak, new Random(1));
+        Assert.InRange(delay, expectedBaseMs, expectedBaseMs + RefreshSchedule.JitterMaxMs);
+    }
+
+    [Fact]
+    public void NetworkTimeoutAndHttpFailuresGrowStreakOthersDoNot()
+    {
+        var rateLimited = new[] { new SectionHealth("cursor", LastOutcome: "Http", HttpStatus: 429) };
+        Assert.Equal(1, RefreshSchedule.NextFailureStreak(0, rateLimited));
+        Assert.Equal(2, RefreshSchedule.NextFailureStreak(1, new[] { new SectionHealth("openai", LastOutcome: "Timeout") }));
+        Assert.Equal(3, RefreshSchedule.NextFailureStreak(2, new[] { new SectionHealth("openai", LastOutcome: "Network") }));
+
+        var parseBroken = new[] { new SectionHealth("openai", LastOutcome: "Parse") };
+        Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, parseBroken));
+
+        var ok = new[] { new SectionHealth("cursor", LastOutcome: "Success") };
+        Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, ok));
+    }
+
+    [Fact]
+    public void FailureStreakIsBoundedAndAnyPressuredSectionCounts()
+    {
+        var mixed = new[]
+        {
+            new SectionHealth("cursor", LastOutcome: "Success"),
+            new SectionHealth("openai", LastOutcome: "Http", HttpStatus: 503)
+        };
+        Assert.Equal(RefreshSchedule.MaxFailureStreak, RefreshSchedule.NextFailureStreak(RefreshSchedule.MaxFailureStreak, mixed));
     }
 
     [Fact]
@@ -28,7 +76,7 @@ public class RefreshScheduleTest
     public void CountdownFormatsMmSsAndDoesNotGoNegative()
     {
         Assert.Equal("next 07:42", RefreshSchedule.FormatCountdown((7 * 60 + 42) * 1_000L));
-        Assert.Equal("next 15:00", RefreshSchedule.FormatCountdown(RefreshSchedule.IntervalMs));
+        Assert.Equal("next 05:00", RefreshSchedule.FormatCountdown(RefreshSchedule.IntervalMs));
         Assert.Equal("next 00:00", RefreshSchedule.FormatCountdown(0L));
         Assert.Equal("next 00:00", RefreshSchedule.FormatCountdown(-5_000L));
     }

@@ -13,7 +13,6 @@ internal sealed class AppHost : IDisposable
     public ICookieStore Cookies => _cookies;
     private readonly DpapiCookieStore _cookies;
     private readonly UsageRepository _repo;
-    private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromMinutes(15) };
     private readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly List<ScheduledWake> _wakes = new();
     private readonly HashSet<string> _firedWakes = new();
@@ -31,6 +30,7 @@ internal sealed class AppHost : IDisposable
     private int _hoverX;
     private int _hoverY;
     private long _nextRefreshAt;
+    private int _failureStreak;
     private bool _busy;
     private bool _miniInTray;
     private bool _dashboardInTray;
@@ -46,7 +46,6 @@ internal sealed class AppHost : IDisposable
         _repo.SnapshotChanged += _ => Dispatcher.CurrentDispatcher.BeginInvoke(Render);
         _repo.RefreshingChanged += _ => Dispatcher.CurrentDispatcher.BeginInvoke(Render);
         _repo.Refreshed += OnRefreshed;
-        _refresh.Tick += async (_, _) => await PeriodicRefresh();
         _tick.Tick += (_, _) => OnTick();
     }
 
@@ -60,7 +59,6 @@ internal sealed class AppHost : IDisposable
         CreateTray();
         _mini = new MiniPanelWindow(this);
         if (Settings.MiniPanelVisible) _mini.Show();
-        _refresh.Start();
         _tick.Start();
         ConsumeTestNotificationFlag();
         Render();
@@ -73,16 +71,18 @@ internal sealed class AppHost : IDisposable
         _busy = true;
         try
         {
-            await _repo.RefreshAsync(allowHtmlFallback: true);
-            Settings.ArmNextRefreshFromNow(Now());
-            _nextRefreshAt = Settings.NextRefreshAtEpochMs;
+            var snapshot = await _repo.RefreshAsync(allowHtmlFallback: true);
+            _failureStreak = RefreshSchedule.NextFailureStreak(_failureStreak, snapshot.HealthList);
         }
         catch (Exception ex)
         {
+            _failureStreak = Math.Min(_failureStreak + 1, RefreshSchedule.MaxFailureStreak);
             ToastService.Show("Usage Widget", DiagnosticSanitizer.Message(ex.Message) ?? "Refresh failed");
         }
         finally
         {
+            Settings.ArmNextRefreshFromNow(Now(), RefreshSchedule.DelayAfterRefreshMs(_failureStreak, Random.Shared));
+            _nextRefreshAt = Settings.NextRefreshAtEpochMs;
             _busy = false;
             Render();
         }
@@ -172,7 +172,6 @@ internal sealed class AppHost : IDisposable
     {
         if (IsExiting) return;
         IsExiting = true;
-        _refresh.Stop();
         _tick.Stop();
         _glancePoll.Stop();
         HideGlance();
