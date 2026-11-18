@@ -95,7 +95,8 @@ public sealed record StaleView(bool IsStale, StaleSeverity Severity, string? Las
 
 public static class StalePolicy
 {
-    public const long RefreshIntervalMs = RefreshSchedule.IntervalMs;
+    /// <summary>Stale thresholds stay on the original 15-minute cadence, independent of the faster refresh.</summary>
+    public const long RefreshIntervalMs = 15L * 60_000;
     public const long StaleAgeMs = 2 * RefreshIntervalMs;
     public const long NotifyAfterMs = 2L * 60 * 60 * 1000;
     public const int AttemptLogLimit = 24;
@@ -277,7 +278,43 @@ public static class DiagnosticSanitizer
 
 public static class RefreshSchedule
 {
-    public const long IntervalMs = 15L * 60_000;
+    /// <summary>Normal gap between automatic refreshes.</summary>
+    public const long IntervalMs = 5L * 60_000;
+
+    /// <summary>Random extra delay added to every scheduled refresh so calls don't line up.</summary>
+    public const long JitterMaxMs = 30_000;
+
+    /// <summary>Back-off after failed refreshes doubles the gap from <see cref="IntervalMs"/> up to this cap.</summary>
+    public const long BackoffCapMs = 30L * 60_000;
+
+    /// <summary>Caps the failure streak so the doubling loop stays bounded.</summary>
+    public const int MaxFailureStreak = 16;
+
+    /// <summary>
+    /// Failure streak after a refresh. Only network errors, timeouts, rate limits (429) and server errors (5xx)
+    /// extend it. Sign-in, data-format and other client-side HTTP errors (e.g. 404 after an endpoint change) don't,
+    /// since backing off would not help them. Resets to zero when no section hit one of those.
+    /// </summary>
+    public static int NextFailureStreak(int previous, IEnumerable<SectionHealth> sections)
+    {
+        var pressured = sections.Any(IsBackoffWorthy);
+        return pressured ? Math.Min(previous + 1, MaxFailureStreak) : 0;
+    }
+
+    private static bool IsBackoffWorthy(SectionHealth s) =>
+        s.OutcomeEnum is FetchOutcome.Network or FetchOutcome.Timeout
+        || (s.OutcomeEnum is FetchOutcome.Http && s.HttpStatus is 429 or >= 500);
+
+    /// <summary>
+    /// Delay until the next automatic refresh: <see cref="IntervalMs"/> doubled per failure (capped), plus jitter.
+    /// </summary>
+    public static long DelayAfterRefreshMs(int failureStreak, Random rng)
+    {
+        var baseMs = IntervalMs;
+        for (var i = 0; i < failureStreak && baseMs < BackoffCapMs; i++)
+            baseMs = Math.Min(baseMs * 2, BackoffCapMs);
+        return baseMs + rng.NextInt64(0, JitterMaxMs + 1);
+    }
 
     public static long NextEpochMs(long lastPeriodicRunEpochMs, long armedEpochMs, long nowMs)
     {

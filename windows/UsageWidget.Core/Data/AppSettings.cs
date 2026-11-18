@@ -127,8 +127,8 @@ public sealed class AppSettings
         });
     }
 
-    public void ArmNextRefreshFromNow(long nowMs) =>
-        Set(s => s with { NextRefreshAtEpochMs = nowMs + RefreshSchedule.IntervalMs });
+    public void ArmNextRefreshFromNow(long nowMs, long delayMs = RefreshSchedule.IntervalMs) =>
+        Set(s => s with { NextRefreshAtEpochMs = nowMs + delayMs });
 
     public void ArmNextRefreshIfUnarmed(long nowMs)
     {

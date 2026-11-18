@@ -818,7 +818,7 @@ internal sealed class DashboardWindow : Window
                 Child = Ui.T($"Stale data on {worst.Id.Title()}" + (worst.StaleValue.ShortReason is { } r ? $" · {r}" : ""), Theme.StaleBrush(worst.StaleValue.Severity), 13)
             });
         }
-        _body.Children.Add(Ui.T("Background refresh every 15 minutes. All times America/New_York.", Theme.MutedBrush, 11));
+        _body.Children.Add(Ui.T($"Background refresh about every {RefreshSchedule.IntervalMs / 60_000} minutes, backing off after errors. All times America/New_York.", Theme.MutedBrush, 11));
         foreach (var section in OnDemandDisplay.Apply(sections, _host.Settings.ShowCursorOnDemand, _host.Settings.ShowGrokOnDemand))
             _body.Children.Add(Ui.SectionCard(section, nowMs, _host.Settings.PercentPerFiveHourWindow, compact: false, _host.OpenSignIn, _host.SignOutSection, () => _ = _host.RefreshNow()));
         _body.Children.Add(Ui.T("Numbers come from each site’s own usage page using your sign-in cookie. Endpoints are undocumented and can break.", Theme.MutedBrush, 11));
