@@ -81,9 +81,9 @@ internal sealed class AppHost : IDisposable
         }
         finally
         {
+            _busy = false;
             Settings.ArmNextRefreshFromNow(Now(), RefreshSchedule.DelayAfterRefreshMs(_failureStreak, Random.Shared));
             _nextRefreshAt = Settings.NextRefreshAtEpochMs;
-            _busy = false;
             Render();
         }
     }

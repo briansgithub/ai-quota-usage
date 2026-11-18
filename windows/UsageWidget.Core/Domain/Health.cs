@@ -291,15 +291,19 @@ public static class RefreshSchedule
     public const int MaxFailureStreak = 16;
 
     /// <summary>
-    /// Failure streak after a refresh. Only network, timeout and HTTP failures (rate limits, server errors)
-    /// extend it; sign-in or data-format problems don't, since backing off would not help them.
-    /// Resets to zero when no section hit one of those.
+    /// Failure streak after a refresh. Only network errors, timeouts, rate limits (429) and server errors (5xx)
+    /// extend it. Sign-in, data-format and other client-side HTTP errors (e.g. 404 after an endpoint change) don't,
+    /// since backing off would not help them. Resets to zero when no section hit one of those.
     /// </summary>
     public static int NextFailureStreak(int previous, IEnumerable<SectionHealth> sections)
     {
-        var pressured = sections.Any(s => s.OutcomeEnum is FetchOutcome.Network or FetchOutcome.Timeout or FetchOutcome.Http);
+        var pressured = sections.Any(IsBackoffWorthy);
         return pressured ? Math.Min(previous + 1, MaxFailureStreak) : 0;
     }
+
+    private static bool IsBackoffWorthy(SectionHealth s) =>
+        s.OutcomeEnum is FetchOutcome.Network or FetchOutcome.Timeout
+        || (s.OutcomeEnum is FetchOutcome.Http && s.HttpStatus is 429 or >= 500);
 
     /// <summary>
     /// Delay until the next automatic refresh: <see cref="IntervalMs"/> doubled per failure (capped), plus jitter.

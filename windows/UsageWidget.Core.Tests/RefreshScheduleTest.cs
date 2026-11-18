@@ -47,6 +47,15 @@ public class RefreshScheduleTest
         var parseBroken = new[] { new SectionHealth("openai", LastOutcome: "Parse") };
         Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, parseBroken));
 
+        var endpointGone = new[] { new SectionHealth("cursor", LastOutcome: "Http", HttpStatus: 404) };
+        Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, endpointGone));
+
+        var authExpired = new[] { new SectionHealth("openai", LastOutcome: "Http", HttpStatus: 401) };
+        Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, authExpired));
+
+        var nonJson200 = new[] { new SectionHealth("openai", LastOutcome: "Http", HttpStatus: 200) };
+        Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, nonJson200));
+
         var ok = new[] { new SectionHealth("cursor", LastOutcome: "Success") };
         Assert.Equal(0, RefreshSchedule.NextFailureStreak(4, ok));
     }
