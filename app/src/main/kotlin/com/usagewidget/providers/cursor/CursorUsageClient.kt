@@ -5,6 +5,7 @@ import com.usagewidget.domain.FetchAttempt
 import com.usagewidget.domain.FetchOutcome
 import com.usagewidget.domain.ManualResetParser
 import com.usagewidget.domain.ProviderId
+import com.usagewidget.domain.UsageDump
 import com.usagewidget.domain.ProviderResult
 import com.usagewidget.domain.ProviderSnapshot
 import com.usagewidget.domain.ProviderStatus
@@ -123,7 +124,7 @@ class CursorUsageClient(
         return ProviderResult.Success(
             snapshot.copy(
                 manualResets = manual,
-                diagnosticJson = manual?.observedJson
+                diagnosticJson = UsageDump.cursorPayload(summaryRaw, sandRaw)
             ),
             attempts
         )

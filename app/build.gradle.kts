@@ -7,18 +7,30 @@ plugins {
 android {
   namespace = "com.usagewidget"
   compileSdk = 36
+  signingConfigs {
+    getByName("debug") {
+      val persisted = file("/cursor/stores/self/usage-widget-debug.keystore")
+      if (persisted.isFile) {
+        storeFile = persisted
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
+    }
+  }
   defaultConfig {
     applicationId = "com.usagewidget"
     minSdk = 34
     targetSdk = 36
-    versionCode = 11
-    versionName = "1.3.6"
+    versionCode = 17
+    versionName = "1.5.2"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   buildTypes {
     release {
       isMinifyEnabled = false
+      signingConfig = signingConfigs.getByName("debug")
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
     }
     debug {

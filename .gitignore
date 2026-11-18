@@ -29,3 +29,7 @@ captures/
 .idea/
 .cursor/
 *.log
+
+windows/**/bin/
+windows/**/obj/
+windows/**/*.user

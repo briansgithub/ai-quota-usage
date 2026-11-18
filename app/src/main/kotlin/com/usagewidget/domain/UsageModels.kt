@@ -13,12 +13,23 @@ enum class ProviderId(val wireName: String, val displayName: String) {
     }
 }
 
+data class DisplayPreferences(
+    val showCursorOnDemand: Boolean = true,
+    val showGrokOnDemand: Boolean = true
+)
+
 enum class ProviderStatus {
     OK,
     NEEDS_SIGN_IN,
     ERROR,
     UNSIGNED,
     LOADING
+}
+
+@Serializable
+enum class MeterBarKind {
+    PACE,
+    CAP
 }
 
 @Serializable
@@ -29,10 +40,14 @@ data class UsageMeter(
     val usedPercent: Double? = null,
     val remainingPercent: Double? = null,
     val resetsAtEpochMs: Long? = null,
-    val resetLabel: String? = null
+    val resetLabel: String? = null,
+    val windowStartEpochMs: Long? = null,
+    val windowLengthMs: Long? = null,
+    val barKind: MeterBarKind = MeterBarKind.PACE
 ) {
     val displayUsedPercent: Int?
         get() = usedPercent?.let { Percent.round(it) }
+            ?: remainingPercent?.let { Percent.round((100.0 - it).coerceAtLeast(0.0)) }
 
     val displayRemainingPercent: Int?
         get() = remainingPercent?.let { Percent.round(it) }
@@ -40,7 +55,21 @@ data class UsageMeter(
 
     val hasUsageBar: Boolean get() = remainingPercent != null || usedPercent != null
 
+    val isCapBar: Boolean get() = barKind == MeterBarKind.CAP
+
+    fun usedLabel(): String? = displayUsedPercent?.let { "$it% used" }
+
     fun remainingLabel(): String? = displayRemainingPercent?.let { "$it% left" }
+
+    fun remainingAmount(): Double? =
+        remainingPercent ?: usedPercent?.let { (100.0 - it).coerceAtLeast(0.0) }
+
+    /** Quota-window identity: period start plus reset, so a reset reseeds even if the overlaid reset timestamp is unchanged. */
+    fun quotaWindowKey(): String {
+        val start = windowStartEpochMs?.toString().orEmpty()
+        val reset = resetsAtEpochMs?.toString() ?: "open"
+        return "$start|$reset"
+    }
 }
 
 @Serializable
@@ -103,9 +132,20 @@ object Percent {
     fun usedFromRemaining(remaining: Double?): Double? =
         remaining?.let { (100.0 - it).coerceAtLeast(0.0) }
 
+    /**
+     * Wire percents from Cursor, Grok, and Codex WHAM are already 0–100
+     * (Cursor `apiPercentUsed: 0.71` is 0.71% used, not 71%). Do not treat
+     * (0, 1) as a fraction.
+     */
+    fun asWirePercent(value: Double): Double {
+        if (!value.isFinite()) return 0.0
+        return value
+    }
+
     fun round(value: Double): Int {
         if (!value.isFinite()) return 0
-        return kotlin.math.round(value).toInt()
+        // Half-up, matching Cursor/Codex dashboard whole percents and Windows AwayFromZero.
+        return kotlin.math.floor(value + 0.5).toInt()
     }
 }
 

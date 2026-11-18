@@ -77,7 +77,7 @@ class OpenAiUsageParserTest {
     }
 
     @Test
-    fun snapshotAlwaysIncludesWeeklyMeter() {
+    fun snapshotOmitsMissingWindowsInsteadOfInventingThem() {
         val json = """
             {
               "plan_type": "plus",
@@ -92,11 +92,152 @@ class OpenAiUsageParserTest {
         """.trimIndent()
         val usage = OpenAiUsageParser.parseWhamUsage(json, snapshotTime)
         val snapshot = OpenAiUsageParser.toSnapshot(usage)
-        assertEquals(listOf("openai.five_hour", "openai.weekly"), snapshot.meters.map { it.id })
+        assertEquals(listOf("openai.five_hour"), snapshot.meters.map { it.id })
         assertEquals(22, snapshot.meters[0].displayUsedPercent)
         assertEquals(78, snapshot.meters[0].displayRemainingPercent)
-        assertEquals("Weekly", snapshot.meters[1].title)
-        assertEquals("No weekly window in response", snapshot.meters[1].resetLabel)
+        assertEquals("5-hour", snapshot.meters[0].title)
+    }
+
+    @Test
+    fun usedPercentBelowOneIsAlreadyAPercentNotAFraction() {
+        val json = """
+            {
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 0.5,
+                  "limit_window_seconds": 18000,
+                  "reset_at": 1793910026
+                },
+                "secondary_window": {
+                  "used_percent": 12.5,
+                  "limit_window_seconds": 604800,
+                  "reset_at": 1794493826
+                }
+              }
+            }
+        """.trimIndent()
+        val usage = OpenAiUsageParser.parseWhamUsage(json, snapshotTime)
+        assertEquals(0.5, usage.fiveHour!!.usedPercent!!, 0.0001)
+        assertEquals(12.5, usage.weekly!!.usedPercent!!, 0.0001)
+        val snapshot = OpenAiUsageParser.toSnapshot(usage)
+        assertEquals("1% used", snapshot.meters[0].usedLabel())
+        assertEquals("13% used", snapshot.meters[1].usedLabel())
+    }
+
+    @Test
+    fun teamWeeklyOnlyDoesNotInventAFiveHourRow() {
+        val json = """
+            {
+              "plan_type": "team",
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 8,
+                  "limit_window_seconds": 604800,
+                  "reset_at": 1794493826
+                }
+              }
+            }
+        """.trimIndent()
+        val usage = OpenAiUsageParser.parseWhamUsage(json, snapshotTime)
+        assertEquals(WindowKind.WEEKLY, usage.weekly!!.kind)
+        assertEquals(null, usage.fiveHour)
+        assertEquals(listOf("openai.weekly"), OpenAiUsageParser.toSnapshot(usage).meters.map { it.id })
+    }
+
+    @Test
+    fun thirtyDayWindowIsNotLabeledWeekly() {
+        val json = """
+            {
+              "plan_type": "free",
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 3,
+                  "limit_window_seconds": 2592000,
+                  "reset_after_seconds": 2000000
+                }
+              }
+            }
+        """.trimIndent()
+        val usage = OpenAiUsageParser.parseWhamUsage(json, snapshotTime)
+        assertEquals(WindowKind.THIRTY_DAY, usage.thirtyDay!!.kind)
+        assertEquals(null, usage.weekly)
+        assertEquals("30-day", usage.thirtyDay!!.title)
+        val reset = usage.thirtyDay!!.resetsAtEpochMs!!
+        assertEquals(snapshotTime + 2_000_000_000L, reset)
+        val snapshot = OpenAiUsageParser.toSnapshot(usage)
+        assertEquals(listOf("openai.thirty_day"), snapshot.meters.map { it.id })
+        assertEquals("30-day", snapshot.meters.single().title)
+    }
+
+    @Test
+    fun prefersResetAtEpochOverResetAfterSeconds() {
+        val json = """
+            {
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 1,
+                  "limit_window_seconds": 18000,
+                  "reset_after_seconds": 10,
+                  "reset_at": 1793910026
+                }
+              }
+            }
+        """.trimIndent()
+        val usage = OpenAiUsageParser.parseWhamUsage(json, snapshotTime)
+        assertEquals(java.time.Instant.parse("2026-11-05T20:20:26Z").toEpochMilli(), usage.fiveHour!!.resetsAtEpochMs)
+    }
+
+    @Test
+    fun includesCodeReviewAdditionalLimitsAndCredits() {
+        val json = """
+            {
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 4,
+                  "limit_window_seconds": 18000,
+                  "reset_at": 1793910026
+                },
+                "secondary_window": {
+                  "used_percent": 9,
+                  "limit_window_seconds": 604800,
+                  "reset_at": 1794493826
+                }
+              },
+              "code_review_rate_limit": {
+                "used_percent": 20,
+                "limit_window_seconds": 604800,
+                "reset_at": 1794493826
+              },
+              "additional_rate_limits": [
+                {
+                  "title": "Deep research",
+                  "rate_limit": {
+                    "primary_window": {
+                      "used_percent": 50,
+                      "limit_window_seconds": 86400,
+                      "reset_at": 1793996426
+                    }
+                  }
+                }
+              ],
+              "credits": {
+                "has_credits": true,
+                "remaining": 12,
+                "total": 20
+              }
+            }
+        """.trimIndent()
+        val usage = OpenAiUsageParser.parseWhamUsage(json, snapshotTime)
+        assertEquals("Code review", usage.codeReview!!.title)
+        assertEquals(20.0, usage.codeReview!!.usedPercent!!, 0.01)
+        assertEquals("12 of 20 credits remaining", usage.creditsLabel)
+        val snapshot = OpenAiUsageParser.toSnapshot(usage)
+        assertEquals(
+            listOf("openai.five_hour", "openai.weekly", "openai.code_review", "openai.deep_research_daily", "openai.credits"),
+            snapshot.meters.map { it.id }
+        )
+        assertEquals("Credits", snapshot.meters.last().title)
+        assertEquals("12 of 20 credits remaining", snapshot.meters.last().resetLabel)
     }
 
     @Test
@@ -106,5 +247,6 @@ class OpenAiUsageParserTest {
         assertEquals(WindowKind.WEEKLY, OpenAiUsageParser.classifyWindow(500_000L, "primary"))
         assertEquals(WindowKind.FIVE_HOUR, OpenAiUsageParser.classifyWindow(18_000L, "secondary"))
         assertEquals(WindowKind.WEEKLY, OpenAiUsageParser.classifyWindow(null, "secondary"))
+        assertEquals(WindowKind.THIRTY_DAY, OpenAiUsageParser.classifyWindow(2_592_000L, "primary"))
     }
 }

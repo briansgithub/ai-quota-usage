@@ -10,13 +10,13 @@ package com.usagewidget.providers.openai
  * Not a public API. Isolated here so a shape change is a local fix.
  *
  * Verified against community docs (CodexBar, ChatGPT Usage Meter, wham gist)
- * and a Nov 5 2026 chatgpt.com/settings/usage snapshot (5-hour + weekly copy).
+ * and chatgpt.com/codex/settings/usage (the Codex usage settings page).
  * Live HTTP was not executed here (no session cookies in the repo).
  */
 object OpenAiEndpoints {
     const val ORIGIN = "https://chatgpt.com"
-    const val USAGE_PAGE = "https://chatgpt.com/settings/usage?tab=overview"
-    const val LOGIN_PAGE = "https://chatgpt.com/auth/login?next=%2Fsettings%2Fusage%3Ftab%3Doverview"
+    const val USAGE_PAGE = "https://chatgpt.com/codex/settings/usage"
+    const val LOGIN_PAGE = "https://chatgpt.com/auth/login?next=%2Fcodex%2Fsettings%2Fusage"
     const val LOGIN_FALLBACK = "https://auth.openai.com/log-in"
     const val SESSION = "https://chatgpt.com/api/auth/session"
     const val WHAM_USAGE = "https://chatgpt.com/backend-api/wham/usage"

@@ -15,6 +15,8 @@ import com.usagewidget.R
 import com.usagewidget.data.AppSettings
 import com.usagewidget.domain.AlertChannel
 import com.usagewidget.domain.AlertToPost
+import com.usagewidget.domain.QuietHours
+import com.usagewidget.domain.QuotaThresholdEngine
 import com.usagewidget.domain.UsageAlertEngine
 import com.usagewidget.domain.UsageSnapshot
 
@@ -35,11 +37,32 @@ class UsageAlertNotifier(
             prefs = settings.alertPreferencesValue(),
             seenKeys = settings.seenAlertKeys()
         )
+        val quiet = QuietHours.isQuiet(
+            nowMs = nowMs,
+            enabled = settings.quietHoursEnabled,
+            startHour = settings.quietHoursStartHour,
+            endHour = settings.quietHoursEndHour
+        )
+        val quota = QuotaThresholdEngine.evaluate(
+            snapshot = current,
+            nowMs = nowMs,
+            prefs = settings.quotaPreferencesValue(),
+            prior = settings.quotaFiredStates(),
+            quiet = quiet || !hasPermission()
+        )
+        settings.replaceQuotaFiredStates(quota.states)
         if (hasPermission()) {
             plan.alerts.forEach { post(it) }
+            quota.alerts.forEach { post(it) }
             settings.replaceSeenAlertKeys(plan.newSeenKeys)
         }
         TimedRefreshScheduler.scheduleAll(context, plan.wakes, nowMs)
+    }
+
+    fun postTest() {
+        ensureChannels()
+        if (!hasPermission()) return
+        post(QuotaThresholdEngine.testAlert())
     }
 
     private fun post(alert: AlertToPost) {
@@ -55,14 +78,17 @@ class UsageAlertNotifier(
         val channelId = when (alert.channel) {
             AlertChannel.RESTORED -> CHANNEL_RESTORED
             AlertChannel.PACING -> CHANNEL_PACING
+            AlertChannel.QUOTA -> CHANNEL_QUOTA
         }
         val icon = when (alert.channel) {
             AlertChannel.RESTORED -> android.R.drawable.stat_notify_sync
             AlertChannel.PACING -> android.R.drawable.ic_dialog_info
+            AlertChannel.QUOTA -> android.R.drawable.ic_dialog_info
         }
         val priority = when (alert.channel) {
             AlertChannel.RESTORED -> NotificationCompat.PRIORITY_DEFAULT
             AlertChannel.PACING -> NotificationCompat.PRIORITY_HIGH
+            AlertChannel.QUOTA -> NotificationCompat.PRIORITY_HIGH
         }
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(icon)
@@ -108,10 +134,22 @@ class UsageAlertNotifier(
                 }
             )
         }
+        if (manager.getNotificationChannel(CHANNEL_QUOTA) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL_QUOTA,
+                    context.getString(R.string.notification_channel_quota_name),
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = context.getString(R.string.notification_channel_quota_description)
+                }
+            )
+        }
     }
 
     companion object {
         const val CHANNEL_RESTORED = "usage_restored"
         const val CHANNEL_PACING = "pacing_alerts"
+        const val CHANNEL_QUOTA = QuotaThresholdEngine.CHANNEL_ID
     }
 }

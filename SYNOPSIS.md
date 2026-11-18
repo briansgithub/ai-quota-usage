@@ -1,6 +1,6 @@
 # Usage Widget — synopsis for a peer clone
 
-On-device Android app (`com.usagewidget`, **1.3.6** / `versionCode` 11) that shows remaining usage and next reset times for **Cursor**, **Grok Bot**, and **Codex**. There is no backend. The peer signs in with **their own** Cursor and ChatGPT accounts; this tree contains no cookies, tokens, or passwords.
+On-device Android app (`com.usagewidget`, **1.5.2** / `versionCode` 17) that shows percent used and next reset times for **Cursor**, **Grok Bot**, and **Codex**. There is no backend. The peer signs in with **their own** Cursor and ChatGPT accounts; this tree contains no cookies, tokens, or passwords.
 
 Target: Pixel-class phone, **Android 14+** (`minSdk` 34). Times are **America/New_York**.
 
@@ -12,17 +12,17 @@ Not affiliated with Anysphere, xAI, or OpenAI. The JSON routes below are **undoc
 
 ### Surfaces
 
-- **Home-screen widget** (Jetpack Glance): three labeled sections — Cursor, Grok Bot, Codex. Resize; a scrolling list keeps every meter. Compact tiles drop progress bars but still show `% left` and `Reset: Mon 3 PM (2d 5h)`. Footer Chronometer counts down to the next refresh.
+- **Home-screen widget** (Jetpack Glance): three labeled sections — Cursor, Grok Bot, Codex. Resize; a scrolling list keeps every meter. Compact tiles drop progress bars but still show `% used` and `Reset: Mon 3 PM (2d 5h)`. Footer Chronometer counts down to the next refresh.
 - **In-app dashboard** (Compose): same sections, pull-to-refresh, per-service sign-in / sign-out, last-updated line, pacing line.
 - **Diagnostics** (bug icon): last attempt / success, HTTP status, endpoint, rolling log, **Copy diagnostics** (cookies and tokens stripped). Settings live here.
 
 ### Meters
 
-1. **Cursor** — Cursor Models % left, Other Models % left, plan reset (same Cursor spending session).
-2. **Grok Bot** — weekly % left and reset (Cursor “Sand” product; same sign-in).
+1. **Cursor** — Cursor Models % used, Other Models % used, on-demand dollars vs cap when set, plan reset (same Cursor spending session).
+2. **Grok Bot** — weekly % used and reset (Cursor “Sand” product; same sign-in), plus the same on-demand dollar bar when a cap is set.
 3. **Codex** — 5-hour and Weekly remaining, scheduled resets, and on-demand **manual full resets** from ChatGPT Usage (`rate_limit_reset_credits`).
 
-Progress bars fill with **% used**; labels stay **% left**. Failed refreshes keep last-good numbers and mark the section stale (~30 min with no success, or an explicit error). After 2 hours of failure, an optional retrieval notification fires.
+Progress bars fill with **% used**; labels are **% used**. Bar color is pace-relative (same math as Windows). Failed refreshes keep last-good numbers and mark the section stale (~30 min with no success, or an explicit error). A successful fetch always replaces last-good meters, including a post-reset drop. After 2 hours of failure, an optional retrieval notification fires.
 
 ### Reset emphasis
 

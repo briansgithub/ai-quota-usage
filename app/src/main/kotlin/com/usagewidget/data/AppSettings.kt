@@ -2,19 +2,31 @@ package com.usagewidget.data
 
 import android.content.Context
 import com.usagewidget.domain.AlertPreferences
+import com.usagewidget.domain.DisplayPreferences
 import com.usagewidget.domain.PacingPolicy
 import com.usagewidget.domain.QuietHours
+import com.usagewidget.domain.QuotaRuleId
+import com.usagewidget.domain.QuotaThresholdPreferences
+import com.usagewidget.domain.QuotaThresholdState
+import com.usagewidget.domain.QuotaThresholds
 import com.usagewidget.domain.RefreshSchedule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class AppSettings private constructor(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val _nextRefreshAtEpochMs = MutableStateFlow(prefs.getLong(KEY_NEXT_REFRESH, 0L))
     val nextRefreshAtEpochMs: StateFlow<Long> = _nextRefreshAtEpochMs
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _alertPreferences = MutableStateFlow(readAlertPreferences())
     val alertPreferences: StateFlow<AlertPreferences> = _alertPreferences.asStateFlow()
+    private val _quotaPreferences = MutableStateFlow(readQuotaPreferences())
+    val quotaPreferences: StateFlow<QuotaThresholdPreferences> = _quotaPreferences.asStateFlow()
+    private val _displayPreferences = MutableStateFlow(readDisplayPreferences())
+    val displayPreferences: StateFlow<DisplayPreferences> = _displayPreferences.asStateFlow()
 
     var failureNotificationsEnabled: Boolean
         get() = prefs.getBoolean(KEY_NOTIFY, true)
@@ -111,8 +123,65 @@ class AppSettings private constructor(context: Context) {
         }
     }
 
+    var quotaAlertsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_MASTER, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_MASTER, value).apply()
+            publishQuota()
+        }
+
+    var quotaThresholdsCsv: String
+        get() = prefs.getString(KEY_QUOTA_THRESHOLDS, null) ?: QuotaThresholds.DEFAULT_CSV
+        set(value) {
+            prefs.edit().putString(KEY_QUOTA_THRESHOLDS, QuotaThresholds.toCsv(QuotaThresholds.parseCsv(value))).apply()
+            publishQuota()
+        }
+
+    var quotaGrokWeeklyEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_GROK, QuotaRuleId.GROK_WEEKLY.defaultEnabled)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_GROK, value).apply()
+            publishQuota()
+        }
+
+    var quotaCursorModelsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_MODELS, QuotaRuleId.CURSOR_MODELS.defaultEnabled)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_MODELS, value).apply()
+            publishQuota()
+        }
+
+    var quotaCodexFiveHourEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_CODEX_FIVE, QuotaRuleId.CODEX_FIVE_HOUR.defaultEnabled)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_CODEX_FIVE, value).apply()
+            publishQuota()
+        }
+
+    var quotaCodexWeeklyEnabled: Boolean
+        get() = prefs.getBoolean(KEY_QUOTA_CODEX_WEEKLY, QuotaRuleId.CODEX_WEEKLY.defaultEnabled)
+        set(value) {
+            prefs.edit().putBoolean(KEY_QUOTA_CODEX_WEEKLY, value).apply()
+            publishQuota()
+        }
+
+    var showCursorOnDemand: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_CURSOR_ON_DEMAND, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_SHOW_CURSOR_ON_DEMAND, value).apply()
+            publishDisplay()
+        }
+
+    var showGrokOnDemand: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_GROK_ON_DEMAND, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_SHOW_GROK_ON_DEMAND, value).apply()
+            publishDisplay()
+        }
+
     fun wantsNotificationPermission(): Boolean =
-        failureNotificationsEnabled || notifyUsageRestored || notifyPacingReminders || notifyPacingMissed
+        failureNotificationsEnabled || notifyUsageRestored || notifyPacingReminders ||
+            notifyPacingMissed || quotaAlertsEnabled
 
     fun seenAlertKeys(): LinkedHashSet<String> {
         val raw = prefs.getString(KEY_SEEN_ALERTS, "") ?: ""
@@ -123,6 +192,20 @@ class AppSettings private constructor(context: Context) {
     fun replaceSeenAlertKeys(keys: Set<String>) {
         prefs.edit().putString(KEY_SEEN_ALERTS, keys.joinToString("\n")).apply()
     }
+
+    fun quotaFiredStates(): Map<String, QuotaThresholdState> {
+        val raw = prefs.getString(KEY_QUOTA_STATES, "") ?: ""
+        if (raw.isBlank()) return emptyMap()
+        return runCatching {
+            json.decodeFromString<Map<String, QuotaThresholdState>>(raw)
+        }.getOrDefault(emptyMap())
+    }
+
+    fun replaceQuotaFiredStates(states: Map<String, QuotaThresholdState>) {
+        prefs.edit().putString(KEY_QUOTA_STATES, json.encodeToString(states)).apply()
+    }
+
+    fun quotaPreferencesValue(): QuotaThresholdPreferences = _quotaPreferences.value
 
     fun alertPreferencesValue(): AlertPreferences = _alertPreferences.value
 
@@ -137,8 +220,35 @@ class AppSettings private constructor(context: Context) {
         quietHoursEndHour = quietHoursEndHour
     )
 
+    private fun readQuotaPreferences(): QuotaThresholdPreferences {
+        val enabled = buildSet {
+            if (quotaGrokWeeklyEnabled) add(QuotaRuleId.GROK_WEEKLY.wire)
+            if (quotaCursorModelsEnabled) add(QuotaRuleId.CURSOR_MODELS.wire)
+            if (quotaCodexFiveHourEnabled) add(QuotaRuleId.CODEX_FIVE_HOUR.wire)
+            if (quotaCodexWeeklyEnabled) add(QuotaRuleId.CODEX_WEEKLY.wire)
+        }
+        return QuotaThresholdPreferences(
+            masterEnabled = quotaAlertsEnabled,
+            thresholds = QuotaThresholds.parseCsv(quotaThresholdsCsv),
+            enabledRules = enabled
+        )
+    }
+
     private fun publishAlerts() {
         _alertPreferences.value = readAlertPreferences()
+    }
+
+    private fun publishQuota() {
+        _quotaPreferences.value = readQuotaPreferences()
+    }
+
+    private fun readDisplayPreferences(): DisplayPreferences = DisplayPreferences(
+        showCursorOnDemand = showCursorOnDemand,
+        showGrokOnDemand = showGrokOnDemand
+    )
+
+    private fun publishDisplay() {
+        _displayPreferences.value = readDisplayPreferences()
     }
 
     private fun setNextRefreshAt(epochMs: Long) {
@@ -162,6 +272,15 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_QUIET_START = "quiet_hours_start_hour"
         private const val KEY_QUIET_END = "quiet_hours_end_hour"
         private const val KEY_SEEN_ALERTS = "seen_alert_keys"
+        private const val KEY_QUOTA_MASTER = "quota_alerts_enabled"
+        private const val KEY_QUOTA_THRESHOLDS = "quota_thresholds_csv"
+        private const val KEY_QUOTA_GROK = "quota_grok_weekly_enabled"
+        private const val KEY_QUOTA_MODELS = "quota_cursor_models_enabled"
+        private const val KEY_QUOTA_CODEX_FIVE = "quota_codex_five_hour_enabled"
+        private const val KEY_QUOTA_CODEX_WEEKLY = "quota_codex_weekly_enabled"
+        private const val KEY_QUOTA_STATES = "quota_fired_states"
+        private const val KEY_SHOW_CURSOR_ON_DEMAND = "show_cursor_on_demand"
+        private const val KEY_SHOW_GROK_ON_DEMAND = "show_grok_on_demand"
 
         @Volatile private var instance: AppSettings? = null
         fun get(context: Context): AppSettings {

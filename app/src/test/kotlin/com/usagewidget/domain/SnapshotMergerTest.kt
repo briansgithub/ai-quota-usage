@@ -2,6 +2,7 @@ package com.usagewidget.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -116,6 +117,74 @@ class SnapshotMergerTest {
         val codex = expired.health(SoftwareSectionId.CODEX)
         assertTrue(codex.hasLastGood)
         assertEquals("Sign-in expired", codex.staleView(now).shortReason)
+    }
+
+    @Test
+    fun successfulFetchReplacesLastGoodWhenUsedDropsAfterPeriodReset() {
+        val previous = seeded()
+        val periodStart = now
+        val resetAt = now + PacingPolicy.GROK_PERIOD_MS
+        val grokAfter = UsageMeter(
+            id = "cursor.grok_bot",
+            title = "Grok Bot",
+            usedPercent = 0.0,
+            remainingPercent = 100.0,
+            resetsAtEpochMs = resetAt,
+            windowStartEpochMs = periodStart,
+            windowLengthMs = PacingPolicy.GROK_PERIOD_MS
+        )
+        val merged = SnapshotMerger.merge(
+            previous = previous,
+            cursorResult = ProviderResult.Success(
+                snapshot = ProviderSnapshot(
+                    "cursor",
+                    "Cursor",
+                    "OK",
+                    meters = cursorMeters + grokAfter,
+                    planLabel = "Pro"
+                ),
+                attempts = listOf(success(SoftwareSectionId.CURSOR), success(SoftwareSectionId.GROK_BOT))
+            ),
+            openaiResult = ProviderResult.Success(
+                snapshot = ProviderSnapshot("openai", "ChatGPT / Codex", "OK", meters = codexMeters),
+                attempts = listOf(success(SoftwareSectionId.CODEX))
+            ),
+            nowMs = now,
+            cursorSignedIn = true,
+            openaiSignedIn = true
+        )
+        val grok = merged.health(SoftwareSectionId.GROK_BOT)
+        assertEquals(0.0, grok.lastGoodMeters.single().usedPercent!!, 0.01)
+        assertEquals(periodStart, grok.lastGoodMeters.single().windowStartEpochMs)
+        assertFalse(grok.staleView(now).isStale)
+        val grokSection = UsageSections.from(merged, now).first { it.id == SoftwareSectionId.GROK_BOT }
+        assertEquals("0% used", grokSection.meters.single { it.id == "cursor.grok_bot" }.usedLabel())
+        assertEquals(100.0, grokSection.meters.single().remainingPercent!!, 0.01)
+    }
+
+    @Test
+    fun successfulFetchWithEmptyGrokMetersClearsLastGood() {
+        val previous = seeded()
+        val merged = SnapshotMerger.merge(
+            previous = previous,
+            cursorResult = ProviderResult.Success(
+                snapshot = ProviderSnapshot("cursor", "Cursor", "OK", meters = cursorMeters, planLabel = "Pro"),
+                attempts = listOf(success(SoftwareSectionId.CURSOR), success(SoftwareSectionId.GROK_BOT))
+            ),
+            openaiResult = ProviderResult.Success(
+                snapshot = ProviderSnapshot("openai", "ChatGPT / Codex", "OK", meters = codexMeters),
+                attempts = listOf(success(SoftwareSectionId.CODEX))
+            ),
+            nowMs = now,
+            cursorSignedIn = true,
+            openaiSignedIn = true
+        )
+        val grok = merged.health(SoftwareSectionId.GROK_BOT)
+        assertTrue(grok.lastGoodMeters.isEmpty())
+        assertFalse(grok.staleView(now).isStale)
+        val grokSection = UsageSections.from(merged, now).first { it.id == SoftwareSectionId.GROK_BOT }
+        assertNull(grokSection.meters.single().usedPercent)
+        assertNull(grokSection.meters.single().usedLabel())
     }
 
     @Test

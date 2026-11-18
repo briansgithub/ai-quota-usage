@@ -4,7 +4,8 @@ import com.usagewidget.domain.ManualResetParser
 import com.usagewidget.util.NyTime
 
 /**
- * Fallback parser for chatgpt.com/settings/usage?tab=overview inner text.
+ * Fallback parser for chatgpt.com/codex/settings/usage inner text (and the older
+ * settings/usage overview copy of 5-hour / weekly limits).
  */
 object OpenAiHtmlExtractor {
     fun extract(pageText: String, fetchedAtMs: Long = System.currentTimeMillis()): OpenAiUsage {

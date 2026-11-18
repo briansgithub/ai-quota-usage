@@ -3,30 +3,39 @@ package com.usagewidget.ui.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -34,8 +43,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,9 +57,15 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.usagewidget.R
+import com.usagewidget.domain.DisplayPreferences
+import com.usagewidget.domain.NyTimeAgo
+import com.usagewidget.domain.OnDemandDisplay
+import com.usagewidget.domain.PaceWindows
 import com.usagewidget.domain.PacingPlanner
 import com.usagewidget.domain.PaceUrgency
 import com.usagewidget.domain.ProviderId
+import com.usagewidget.domain.UsedGradient
 import com.usagewidget.domain.ProviderStatus
 import com.usagewidget.domain.RefreshSchedule
 import com.usagewidget.domain.ResetEmphasis
@@ -80,12 +98,24 @@ import kotlinx.coroutines.delay
 fun DashboardScreen(
     viewModel: DashboardViewModel,
     onSignIn: (ProviderId) -> Unit,
-    onOpenDiagnostics: () -> Unit
+    onOpenDiagnostics: () -> Unit,
+    openSettings: Boolean = false
 ) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val nextRefreshAt by viewModel.nextRefreshAtEpochMs.collectAsStateWithLifecycle()
     val alerts by viewModel.alertPreferences.collectAsStateWithLifecycle()
+    val display by viewModel.displayPreferences.collectAsStateWithLifecycle()
+    var settingsOpen by remember { mutableStateOf(openSettings) }
+
+    if (settingsOpen) {
+        OnDemandSettingsDialog(
+            display = display,
+            onCursor = viewModel::setShowCursorOnDemand,
+            onGrok = viewModel::setShowGrokOnDemand,
+            onDismiss = { settingsOpen = false }
+        )
+    }
 
     Scaffold(
         containerColor = CursorChrome,
@@ -93,6 +123,9 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("Usage") },
                 actions = {
+                    IconButton(onClick = { settingsOpen = true }) {
+                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.settings))
+                    }
                     IconButton(onClick = onOpenDiagnostics) {
                         Icon(Icons.Outlined.BugReport, contentDescription = "Diagnostics")
                     }
@@ -119,6 +152,7 @@ fun DashboardScreen(
                 snapshot = snapshot,
                 nextRefreshAtEpochMs = nextRefreshAt,
                 percentPerWindow = alerts.percentPerWindow,
+                display = display,
                 onSignIn = onSignIn,
                 onSignOut = { viewModel.signOut(it) }
             )
@@ -127,15 +161,62 @@ fun DashboardScreen(
 }
 
 @Composable
+private fun OnDemandSettingsDialog(
+    display: DisplayPreferences,
+    onCursor: (Boolean) -> Unit,
+    onGrok: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = CursorSurface
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, color = CursorText)
+                Text(stringResource(R.string.show_on_demand), color = CursorText, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Hides that dollar-cap bar. Included quota bars stay.",
+                    color = CursorMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OnDemandSwitch(stringResource(R.string.show_on_demand_cursor), display.showCursorOnDemand, onCursor)
+                OnDemandSwitch(stringResource(R.string.show_on_demand_grok), display.showGrokOnDemand, onGrok)
+                HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
+                    Text("Done")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnDemandSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = CursorText, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
 private fun DashboardBody(
     snapshot: UsageSnapshot,
     nextRefreshAtEpochMs: Long,
     percentPerWindow: Double,
+    display: DisplayPreferences,
     onSignIn: (ProviderId) -> Unit,
     onSignOut: (ProviderId) -> Unit
 ) {
     val now = System.currentTimeMillis()
-    val sections = UsageSections.from(snapshot, now)
+    val sections = OnDemandDisplay.apply(
+        UsageSections.from(snapshot, now),
+        showCursor = display.showCursorOnDemand,
+        showGrok = display.showGrokOnDemand
+    )
     val anyStale = sections.any { it.stale.isStale }
     Column(
         modifier = Modifier
@@ -154,7 +235,7 @@ private fun DashboardBody(
             )
         }
         Text(
-            text = lastUpdatedLine(snapshot.fetchedAtEpochMs),
+            text = lastUpdatedLine(snapshot.fetchedAtEpochMs, now),
             style = MaterialTheme.typography.bodySmall,
             color = CursorMuted
         )
@@ -325,7 +406,7 @@ private fun SectionCard(
 
 @Composable
 fun MeterRow(meter: UsageMeter, nowMs: Long = System.currentTimeMillis(), stale: Boolean = false) {
-    val remaining = meter.remainingLabel()
+    val used = meter.usedLabel()
     val reset = meter.resetsAtEpochMs?.let { NyTime.formatResetLine(it, nowMs) }
         ?: meter.resetLabel
     val titleColor = if (stale) CursorMuted else CursorText
@@ -337,38 +418,52 @@ fun MeterRow(meter: UsageMeter, nowMs: Long = System.currentTimeMillis(), stale:
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyLarge
             )
-            if (remaining != null) {
-                Text(remaining, color = CursorText, style = MaterialTheme.typography.bodyMedium)
+            if (used != null) {
+                Text(used, color = CursorText, style = MaterialTheme.typography.bodyMedium)
             } else if (!reset.isNullOrBlank() && !meter.hasUsageBar) {
                 ResetText(reset, meter.resetsAtEpochMs, nowMs)
             }
         }
         if (meter.hasUsageBar) {
-            UsageBar(percent = meter.displayUsedPercent?.toFloat() ?: 0f)
+            UsageBar(meter = meter, nowMs = nowMs)
         }
-        if (remaining != null && !reset.isNullOrBlank()) {
+        if (used != null && !reset.isNullOrBlank()) {
             ResetText(reset, meter.resetsAtEpochMs, nowMs)
         }
     }
 }
 
 @Composable
-fun UsageBar(percent: Float) {
-    val clamped = percent.coerceIn(0f, 100f)
-    val color = if (clamped >= 90f) CursorBarWarn else CursorBar
-    Box(
+fun UsageBar(meter: UsageMeter, nowMs: Long) {
+    val used = (meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: 0.0).coerceIn(0.0, 100.0)
+    val expected = if (meter.isCapBar) null else PaceWindows.expectedUsedPercent(meter, nowMs)
+    val fill = if (meter.isCapBar) UsedGradient.capFill(used) else UsedGradient.fill(used, expected)
+    val fillColor = Color(red = fill.r / 255f, green = fill.g / 255f, blue = fill.b / 255f)
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(8.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(CursorTrack)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(clamped / 100f)
-                .height(8.dp)
-                .background(color)
-        )
+        if (used > 0.0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth((used / 100.0).toFloat())
+                    .fillMaxHeight()
+                    .background(fillColor)
+            )
+        }
+        if (!meter.isCapBar && expected != null) {
+            val tickX = maxWidth * (expected.coerceIn(0.0, 100.0) / 100.0).toFloat()
+            Box(
+                modifier = Modifier
+                    .offset(x = tickX - 1.dp)
+                    .width(2.dp)
+                    .fillMaxHeight()
+                    .background(Color(0xFFF5F5F5))
+            )
+        }
     }
 }
 
@@ -420,9 +515,9 @@ private fun signInLabel(section: SoftwareSection): String = when (section.id) {
     SoftwareSectionId.CURSOR -> "Sign in"
 }
 
-private fun lastUpdatedLine(epochMs: Long): String {
+private fun lastUpdatedLine(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
     if (epochMs <= 0L) return "Not updated yet"
-    return "Last updated ${NyTime.formatAbsolute(epochMs)} (America/New_York)"
+    return "Updated ${NyTimeAgo.format(epochMs, nowMs)} · ${NyTime.formatAbsolute(epochMs)}"
 }
 
 @Composable

@@ -1,0 +1,26 @@
+Usage
+Overview
+Analytics
+Plan limits
+Shared across Codex, Work, Workspace Agents, and ChatGPT for Excel. Chat conversations are not included. To increase usage,
+upgrade your plan
+5-hour limit
+Resets in 4h 50m
+100% left
+Weekly limit
+Resets in 6d 23h
+100% left
+Recent plan usage
+How your activity draws down your allowance
+5-hour
+Weekly
+100%
+Balance history isn’t available yet
+View usage history
+Credits
+Buy credits or turn on automatic reload to continue using Work and Codex when you reach usage limits.
+0 credits remaining
+Usage limit resets
+Use a reset to restore your 5-hour limit, weekly limit, or both
+Full reset (Weekly + 5 hr)
+Expires Nov 6, 4:36 PM EST

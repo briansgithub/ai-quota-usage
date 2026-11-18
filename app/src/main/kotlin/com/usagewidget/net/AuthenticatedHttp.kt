@@ -2,6 +2,7 @@ package com.usagewidget.net
 
 import com.usagewidget.auth.SecureCookieStore
 import com.usagewidget.util.HttpBodies
+import okhttp3.CacheControl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -61,7 +62,9 @@ class AuthenticatedHttp(
         builder.header("Accept", "application/json")
         builder.header("User-Agent", AppHeaders.USER_AGENT)
         builder.header("Accept-Language", "en-US,en;q=0.9")
-        builder.header("Cache-Control", "no-cache")
+        builder.header("Cache-Control", "no-cache, no-store")
+        builder.header("Pragma", "no-cache")
+        builder.cacheControl(CacheControl.FORCE_NETWORK)
         val cookie = cookies.cookieHeader(cookieHost)
         if (!cookie.isNullOrBlank()) {
             builder.header("Cookie", cookie)

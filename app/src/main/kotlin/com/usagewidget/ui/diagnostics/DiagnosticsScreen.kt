@@ -25,6 +25,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,9 +34,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
@@ -44,6 +50,7 @@ import com.usagewidget.BuildConfig
 import com.usagewidget.domain.DiagnosticsReport
 import com.usagewidget.domain.FetchAttempt
 import com.usagewidget.domain.HealthSynthesis
+import com.usagewidget.domain.QuotaRuleId
 import com.usagewidget.domain.SectionHealth
 import com.usagewidget.domain.SoftwareSectionId
 import com.usagewidget.ui.dashboard.DashboardViewModel
@@ -65,6 +72,8 @@ fun DiagnosticsScreen(
 ) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val alerts by viewModel.alertPreferences.collectAsStateWithLifecycle()
+    val quota by viewModel.quotaPreferences.collectAsStateWithLifecycle()
+    val display by viewModel.displayPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val hydrated = HealthSynthesis.hydrate(snapshot)
 
@@ -103,6 +112,23 @@ fun DiagnosticsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Settings", style = MaterialTheme.typography.titleMedium, color = CursorText)
+                Text(stringResource(R.string.show_on_demand), color = CursorText, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Hides that dollar-cap bar. Included quota bars stay.",
+                    color = CursorMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.show_on_demand_cursor),
+                    checked = display.showCursorOnDemand,
+                    onCheckedChange = { viewModel.setShowCursorOnDemand(it) }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.show_on_demand_grok),
+                    checked = display.showGrokOnDemand,
+                    onCheckedChange = { viewModel.setShowGrokOnDemand(it) }
+                )
+                HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
                 Text(
                     "Background refresh every 15 minutes (WorkManager periodic minimum).",
                     color = CursorMuted,
@@ -145,6 +171,77 @@ fun DiagnosticsScreen(
                     checked = alerts.quietHoursEnabled,
                     onCheckedChange = { viewModel.setQuietHoursEnabled(it) }
                 )
+                HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
+                Text("Quota remaining", style = MaterialTheme.typography.titleSmall, color = CursorText)
+                Text(
+                    "Notify when remaining quota crosses a step downward. One notice per step per billing window; several steps between refreshes send the lowest. Agents are never paused.",
+                    color = CursorMuted,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_alerts),
+                    checked = quota.masterEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.setQuotaAlertsEnabled(enabled)
+                        onNotificationsToggled(viewModel.wantsNotificationPermission())
+                    }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_grok_weekly),
+                    checked = QuotaRuleId.GROK_WEEKLY.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaGrokWeeklyEnabled(it) }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_cursor_models),
+                    checked = QuotaRuleId.CURSOR_MODELS.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaCursorModelsEnabled(it) }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_codex_five),
+                    checked = QuotaRuleId.CODEX_FIVE_HOUR.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaCodexFiveHourEnabled(it) }
+                )
+                SettingSwitch(
+                    label = stringResource(R.string.quota_codex_weekly),
+                    checked = QuotaRuleId.CODEX_WEEKLY.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaCodexWeeklyEnabled(it) }
+                )
+                var thresholdsCsv by rememberSaveable(quota.thresholdsCsv) { mutableStateOf(quota.thresholdsCsv) }
+                OutlinedTextField(
+                    value = thresholdsCsv,
+                    onValueChange = { thresholdsCsv = it },
+                    label = { Text(stringResource(R.string.quota_thresholds)) },
+                    supportingText = {
+                        Text("Comma-separated remaining percents. Default every 10% from 90 to 30, then every 5% to 0.")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onFocusChanged { focus ->
+                            if (!focus.isFocused) viewModel.setQuotaThresholdsCsv(thresholdsCsv)
+                        },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = CursorText,
+                        unfocusedTextColor = CursorText,
+                        focusedBorderColor = CursorBar,
+                        unfocusedBorderColor = CursorMuted,
+                        focusedLabelColor = CursorText,
+                        unfocusedLabelColor = CursorMuted,
+                        focusedSupportingTextColor = CursorMuted,
+                        unfocusedSupportingTextColor = CursorMuted,
+                        cursorColor = CursorBar
+                    )
+                )
+                Button(
+                    onClick = {
+                        onNotificationsToggled(true)
+                        viewModel.sendTestNotification()
+                        Toast.makeText(context, "Test notification sent", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CursorBar),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.send_test_notification))
+                }
                 Text(
                     stringResource(R.string.percent_per_window),
                     color = CursorText,

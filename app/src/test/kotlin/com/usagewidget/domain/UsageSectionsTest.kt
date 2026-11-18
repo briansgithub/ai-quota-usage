@@ -64,12 +64,13 @@ class UsageSectionsTest {
         assertEquals(12, sections[2].meters[1].displayUsedPercent)
         assertEquals(88, sections[2].meters[1].displayRemainingPercent)
         assertEquals("83% left", sections[0].meters[0].remainingLabel())
+        assertEquals("17% used", sections[0].meters[0].usedLabel())
         assertNull(sections[0].meters[2].remainingLabel())
         assertTrue(sections[0].meters[2].resetsAtEpochMs != null)
     }
 
     @Test
-    fun codexAlwaysExposesWeeklyEvenWhenProviderOmitsIt() {
+    fun codexShowsOnlyWindowsTheProviderReturned() {
         val snapshot = UsageSnapshot(
             fetchedAtEpochMs = 1L,
             providers = listOf(
@@ -78,14 +79,14 @@ class UsageSectionsTest {
                     displayName = "ChatGPT / Codex",
                     status = ProviderStatus.OK.name,
                     meters = listOf(
-                        UsageMeter("openai.five_hour", "5-hour", usedPercent = 40.0, remainingPercent = 60.0)
+                        UsageMeter("openai.weekly", "Weekly", usedPercent = 8.0, remainingPercent = 92.0)
                     )
                 )
             )
         )
-        val weekly = UsageSections.from(snapshot)[2].meters.find { it.id == "openai.weekly" }
-        assertNotNull(weekly)
-        assertEquals("Weekly", weekly!!.title)
+        val meters = UsageSections.from(snapshot)[2].meters
+        assertEquals(listOf("openai.weekly"), meters.map { it.id })
+        assertNull(meters.find { it.id == "openai.five_hour" })
     }
 
     @Test
@@ -128,5 +129,79 @@ class UsageSectionsTest {
         assertEquals(40, codex.meters[0].displayUsedPercent)
         assertEquals(12, codex.meters[1].displayUsedPercent)
         assertTrue(codex.stale.lastUpdatedLine!!.startsWith("Last updated"))
+    }
+
+    @Test
+    fun onDemandBarsSitOnCursorAndGrokCards() {
+        val snapshot = UsageSnapshot(
+            fetchedAtEpochMs = 1L,
+            providers = listOf(
+                ProviderSnapshot(
+                    id = "cursor",
+                    displayName = "Cursor",
+                    status = ProviderStatus.OK.name,
+                    meters = listOf(
+                        UsageMeter("cursor.models", "Cursor Models", usedPercent = 17.0, remainingPercent = 83.0),
+                        UsageMeter("cursor.other", "Other Models", usedPercent = 40.0, remainingPercent = 60.0),
+                        UsageMeter(
+                            "cursor.on_demand",
+                            "On-demand  $12.34 / $50",
+                            usedPercent = 24.68,
+                            remainingPercent = 75.32,
+                            barKind = MeterBarKind.CAP
+                        ),
+                        UsageMeter("cursor.plan_reset", "Plan reset", resetsAtEpochMs = resetMs),
+                        UsageMeter("cursor.grok_bot", "Grok Bot", usedPercent = 65.0, remainingPercent = 35.0),
+                        UsageMeter(
+                            "cursor.grok_on_demand",
+                            "On-demand  $12.34 / $50",
+                            usedPercent = 24.68,
+                            remainingPercent = 75.32,
+                            barKind = MeterBarKind.CAP
+                        )
+                    )
+                )
+            )
+        )
+        val sections = UsageSections.from(snapshot)
+        assertEquals(
+            listOf("cursor.models", "cursor.other", "cursor.on_demand", "cursor.plan_reset"),
+            sections[0].meters.map { it.id }
+        )
+        assertEquals(
+            listOf("cursor.grok_bot", "cursor.grok_on_demand"),
+            sections[1].meters.map { it.id }
+        )
+        assertEquals("Weekly usage", sections[1].meters[0].title)
+        assertTrue(sections[0].meters[2].isCapBar)
+        assertTrue(sections[1].meters[1].isCapBar)
+    }
+
+    @Test
+    fun onDemandDisplayHidesEachBarIndependently() {
+        val snapshot = UsageSnapshot(
+            fetchedAtEpochMs = 1L,
+            providers = listOf(
+                ProviderSnapshot(
+                    id = "cursor",
+                    displayName = "Cursor",
+                    status = ProviderStatus.OK.name,
+                    meters = listOf(
+                        UsageMeter("cursor.models", "Cursor Models", usedPercent = 17.0, remainingPercent = 83.0),
+                        UsageMeter("cursor.on_demand", "On-demand  $12.34 / $50", usedPercent = 24.68, remainingPercent = 75.32, barKind = MeterBarKind.CAP),
+                        UsageMeter("cursor.grok_bot", "Grok Bot", usedPercent = 65.0, remainingPercent = 35.0),
+                        UsageMeter("cursor.grok_on_demand", "On-demand  $12.34 / $50", usedPercent = 24.68, remainingPercent = 75.32, barKind = MeterBarKind.CAP)
+                    )
+                )
+            )
+        )
+        val shown = UsageSections.from(snapshot)
+        val cursorOff = OnDemandDisplay.apply(shown, showCursor = false, showGrok = true)
+        assertEquals(listOf("cursor.models"), cursorOff[0].meters.map { it.id })
+        assertEquals(listOf("cursor.grok_bot", "cursor.grok_on_demand"), cursorOff[1].meters.map { it.id })
+        val grokOff = OnDemandDisplay.apply(shown, showCursor = true, showGrok = false)
+        assertEquals(listOf("cursor.models", "cursor.on_demand"), grokOff[0].meters.map { it.id })
+        assertEquals(listOf("cursor.grok_bot"), grokOff[1].meters.map { it.id })
+        assertEquals(shown, OnDemandDisplay.apply(shown, showCursor = true, showGrok = true))
     }
 }

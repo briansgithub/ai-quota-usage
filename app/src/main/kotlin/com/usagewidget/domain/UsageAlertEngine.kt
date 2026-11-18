@@ -14,7 +14,7 @@ data class AlertPreferences(
     val quietHoursEndHour: Int = QuietHours.DEFAULT_END_HOUR
 )
 
-enum class AlertChannel { RESTORED, PACING }
+enum class AlertChannel { RESTORED, PACING, QUOTA }
 
 data class AlertToPost(
     val channel: AlertChannel,

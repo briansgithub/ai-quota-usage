@@ -31,6 +31,11 @@ object DiagnosticsReport {
             builder.appendLine("  Last-good meters: ${health.lastGoodMeters.size}")
             builder.appendLine("  Manual resets: ${health.lastGoodManualResets?.displayLine() ?: "hidden (none present)"}")
             builder.appendLine("  Observed JSON: ${health.lastGoodDiagnosticJson ?: "—"}")
+            UsageSections.from(hydrated, nowMs).first { it.id == section }.meters.forEach { meter ->
+                builder.appendLine(
+                    "  ${meter.id} used=${meter.usedPercent} display=${meter.usedLabel() ?: "—"} resetMs=${meter.resetsAtEpochMs} windowStart=${meter.windowStartEpochMs} lengthMs=${meter.windowLengthMs}"
+                )
+            }
             builder.appendLine()
         }
         builder.appendLine("Recent attempts")

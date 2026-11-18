@@ -17,6 +17,7 @@ import kotlin.math.abs
 
 object NyTime {
     val zone: ZoneId = ZoneId.of(NyZone.ID)
+    private const val GROK_WEEK_MS = 7L * 24 * 60 * 60 * 1000
 
     private val absolute: DateTimeFormatter =
         DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a z", Locale.US)
@@ -62,6 +63,14 @@ object NyTime {
         return zoned.format(formatter)
     }
 
+    /** Weekday plus always-minutes clock, e.g. `Mon 3:00 PM ET`. */
+    fun formatQuotaReset(epochMs: Long): String {
+        val zoned = Instant.ofEpochMilli(epochMs).atZone(zone)
+        val day = zoned.format(weekday)
+        val clock = zoned.format(clockHourMinute)
+        return "$day $clock ET"
+    }
+
     fun isUtcMidnight(epochMs: Long): Boolean {
         val utc = Instant.ofEpochMilli(epochMs).atZone(ZoneOffset.UTC)
         return utc.toLocalTime() == LocalTime.MIDNIGHT && utc.nano == 0
@@ -79,12 +88,30 @@ object NyTime {
         return ZonedDateTime.of(date, time, zone).toInstant().toEpochMilli()
     }
 
-    fun withClockIfDateTruncated(nextEpochMs: Long?, clockEpochMs: Long?): Long? {
+    fun withClockIfDateTruncated(
+        nextEpochMs: Long?,
+        clockEpochMs: Long?,
+        nowMs: Long? = null
+    ): Long? {
         if (nextEpochMs == null) return null
         if (clockEpochMs == null) return nextEpochMs
         if (!isUtcMidnight(nextEpochMs)) return nextEpochMs
         if (isUtcMidnight(clockEpochMs)) return nextEpochMs
-        return overlayUtcDateWithNyClock(nextEpochMs, clockEpochMs)
+        var stamped = overlayUtcDateWithNyClock(nextEpochMs, clockEpochMs)
+        val week = GROK_WEEK_MS
+        var guard = 0
+        // Date-only nextReset stamped with the new period-start clock equals that start
+        // (the reset that just fired) instead of +7 days. Roll until it is after both
+        // the period start and "now" so the widget does not show "due" / old pacing.
+        while (stamped <= clockEpochMs && guard++ < 4) {
+            stamped += week
+        }
+        if (nowMs != null) {
+            while (stamped <= nowMs && guard++ < 8) {
+                stamped += week
+            }
+        }
+        return stamped
     }
 
     fun formatResetRelative(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {

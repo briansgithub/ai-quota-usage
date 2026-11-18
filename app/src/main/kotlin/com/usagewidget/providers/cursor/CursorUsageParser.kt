@@ -1,5 +1,7 @@
 package com.usagewidget.providers.cursor
 
+import com.usagewidget.domain.MeterBarKind
+import com.usagewidget.domain.PacingPolicy
 import com.usagewidget.domain.Percent
 import com.usagewidget.domain.ProviderId
 import com.usagewidget.domain.ProviderSnapshot
@@ -54,6 +56,11 @@ object CursorUsageParser {
                 ?: root.num("billingCycleEnd", "billing_cycle_end"),
             fetchedAtMs
         )
+        val startMs = NyTime.parseTimestamp(
+            root.str("billingCycleStart", "billing_cycle_start")
+                ?: root.num("billingCycleStart", "billing_cycle_start"),
+            fetchedAtMs
+        )
 
         val planLabel = root.str("membershipType", "membership_type", "planName", "plan_name")
             ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
@@ -62,11 +69,14 @@ object CursorUsageParser {
             throw IllegalArgumentException("Cursor usage-summary is missing plan percentages and reset date")
         }
 
+        val onDemand = OnDemandSpend.fromUsageSummary(root)
         return CursorPlanUsage(
             planLabel = planLabel,
             cursorModelsUsedPercent = auto,
             otherModelsUsedPercent = other,
-            resetsAtEpochMs = resetMs
+            resetsAtEpochMs = resetMs,
+            windowStartEpochMs = startMs,
+            onDemand = onDemand
         )
     }
 
@@ -97,9 +107,11 @@ object CursorUsageParser {
             "currentPeriodStart",
             "current_period_start"
         )
+        val startMs = NyTime.parseTimestamp(startRaw, fetchedAtMs)
         val resetMs = NyTime.withClockIfDateTruncated(
             nextEpochMs = NyTime.parseTimestamp(nextRaw, fetchedAtMs),
-            clockEpochMs = NyTime.parseTimestamp(startRaw, fetchedAtMs)
+            clockEpochMs = startMs,
+            nowMs = fetchedAtMs
         )
 
         val included = root.bool("hasNonZeroIncludedLimit", "has_non_zero_included_limit")
@@ -114,7 +126,9 @@ object CursorUsageParser {
             usedPercent = used,
             resetsAtEpochMs = resetMs,
             hasIncludedAllowance = hasAllowance,
-            planLabel = root.str("grokPlanLabel", "grok_plan_label", "cursorPlanName", "cursor_plan_name")
+            planLabel = root.str("grokPlanLabel", "grok_plan_label", "cursorPlanName", "cursor_plan_name"),
+            windowStartEpochMs = startMs,
+            onDemand = OnDemandSpend.fromSandUsage(root)
         )
     }
 
@@ -132,20 +146,26 @@ object CursorUsageParser {
                 title = "Cursor Models",
                 subtitle = "Includes Cursor Grok and Composer",
                 used = plan.cursorModelsUsedPercent,
-                reset = plan.resetsAtEpochMs
+                reset = plan.resetsAtEpochMs,
+                windowStart = plan.windowStartEpochMs,
+                windowLength = PacingPolicy.CURSOR_PERIOD_MS
             )
             meters += meter(
                 id = "cursor.other",
                 title = "Other Models",
                 subtitle = "Named / API models",
                 used = plan.otherModelsUsedPercent,
-                reset = plan.resetsAtEpochMs
+                reset = plan.resetsAtEpochMs,
+                windowStart = plan.windowStartEpochMs,
+                windowLength = PacingPolicy.CURSOR_PERIOD_MS
             )
+            plan.onDemand?.toMeter("cursor.on_demand")?.let { meters += it }
             if (plan.resetsAtEpochMs != null) {
                 meters += UsageMeter(
                     id = "cursor.plan_reset",
                     title = "Plan reset",
-                    resetsAtEpochMs = plan.resetsAtEpochMs
+                    resetsAtEpochMs = plan.resetsAtEpochMs,
+                    windowStartEpochMs = plan.windowStartEpochMs
                 )
             }
         }
@@ -155,9 +175,13 @@ object CursorUsageParser {
                 title = "Grok Bot",
                 subtitle = "Weekly usage",
                 used = grok.usedPercent,
-                reset = grok.resetsAtEpochMs
+                reset = grok.resetsAtEpochMs,
+                windowStart = grok.windowStartEpochMs,
+                windowLength = PacingPolicy.GROK_PERIOD_MS
             )
         }
+        val grokOnDemand = grok?.onDemand ?: plan?.onDemand
+        grokOnDemand?.toMeter("cursor.grok_on_demand")?.let { meters += it }
         val errors = listOfNotNull(
             planError?.let { "Plan: $it" },
             grokError?.let { "Grok Bot: $it" }
@@ -183,14 +207,18 @@ object CursorUsageParser {
         title: String,
         subtitle: String,
         used: Double?,
-        reset: Long?
+        reset: Long?,
+        windowStart: Long? = null,
+        windowLength: Long? = null
     ): UsageMeter = UsageMeter(
         id = id,
         title = title,
         subtitle = subtitle,
         usedPercent = used,
         remainingPercent = Percent.remainingFromUsed(used),
-        resetsAtEpochMs = reset
+        resetsAtEpochMs = reset,
+        windowStartEpochMs = windowStart,
+        windowLengthMs = windowLength
     )
 
     private fun timestampField(obj: JsonObject, vararg names: String): Any? {
@@ -203,7 +231,7 @@ object CursorUsageParser {
     private fun readPercent(obj: JsonObject?, vararg names: String): Double? {
         if (obj == null) return null
         val value = obj.num(*names) ?: return null
-        return normalizePercent(value)
+        return Percent.asWirePercent(value)
     }
 
     private fun percentFromMessage(message: String?): Double? {
@@ -212,24 +240,98 @@ object CursorUsageParser {
         return match.groupValues[1].toDoubleOrNull()
     }
 
-    private fun normalizePercent(value: Double): Double {
-        if (!value.isFinite()) return 0.0
-        // Some payloads may emit 0.17 instead of 17. Treat (0,1) as a fraction,
-        // but keep 0 and 1 as 0% / 1% because dashboards use whole percents.
-        return if (value > 0.0 && value < 1.0) value * 100.0 else value
-    }
 }
 
 data class CursorPlanUsage(
     val planLabel: String?,
     val cursorModelsUsedPercent: Double?,
     val otherModelsUsedPercent: Double?,
-    val resetsAtEpochMs: Long?
+    val resetsAtEpochMs: Long?,
+    val windowStartEpochMs: Long? = null,
+    val onDemand: OnDemandSpend? = null
 )
 
 data class CursorGrokUsage(
     val usedPercent: Double,
     val resetsAtEpochMs: Long?,
     val hasIncludedAllowance: Boolean,
-    val planLabel: String?
+    val planLabel: String?,
+    val windowStartEpochMs: Long? = null,
+    val onDemand: OnDemandSpend? = null
 )
+
+/**
+ * On-demand spend vs a dollar cap. Cursor `usage-summary` documents
+ * `individualUsage.onDemand.{used,limit,remaining}` in **cents** (live
+ * captures: used 2309 with limit null; our fixture used 0 / limit null).
+ * Hide when spend or limit is missing, or the limit is 0/unset.
+ */
+data class OnDemandSpend(
+    val usedCents: Double,
+    val limitCents: Double
+) {
+    val usedUsd: Double get() = usedCents / 100.0
+    val limitUsd: Double get() = limitCents / 100.0
+    val usedPercent: Double get() = (usedCents / limitCents * 100.0).coerceAtLeast(0.0)
+
+    fun title(): String = "On-demand  ${formatUsd(usedUsd)} / ${formatUsd(limitUsd)}"
+
+    fun toMeter(id: String): UsageMeter = UsageMeter(
+        id = id,
+        title = title(),
+        subtitle = "Paid usage beyond included quota",
+        usedPercent = usedPercent,
+        remainingPercent = Percent.remainingFromUsed(usedPercent),
+        barKind = MeterBarKind.CAP
+    )
+
+    companion object {
+        fun fromUsageSummary(root: JsonObject): OnDemandSpend? {
+            val individual = root.obj("individualUsage", "individual_usage")
+                ?.obj("onDemand", "on_demand")
+            val team = root.obj("teamUsage", "team_usage")
+                ?.obj("onDemand", "on_demand")
+            return fromBlock(individual) ?: fromBlock(team)
+        }
+
+        fun fromSandUsage(root: JsonObject): OnDemandSpend? {
+            val settings = root.obj("onDemandSettings", "on_demand_settings")
+            if (settings?.bool("enabled") == false) return null
+            fromBlock(settings)?.let { return it }
+            fromBlock(root.obj("onDemand", "on_demand"))?.let { return it }
+            val used = cents(root, "onDemandUsed", "on_demand_used", "onDemandSpend", "on_demand_spend")
+            val limit = cents(root, "onDemandLimit", "on_demand_limit", "onDemandCap", "on_demand_cap")
+            return of(used, limit, enabled = null)
+        }
+
+        fun fromBlock(obj: JsonObject?): OnDemandSpend? {
+            if (obj == null) return null
+            val enabled = obj.bool("enabled")
+            val used = cents(obj, "used", "spend", "spent", "totalSpend", "total_spend")
+            val limit = cents(obj, "limit", "cap", "spendLimit", "spend_limit")
+            val remaining = cents(obj, "remaining")
+            val spend = used ?: if (limit != null && remaining != null) (limit - remaining).coerceAtLeast(0.0) else null
+            return of(spend, limit, enabled)
+        }
+
+        fun of(usedCents: Double?, limitCents: Double?, enabled: Boolean?): OnDemandSpend? {
+            if (enabled == false) return null
+            if (usedCents == null || limitCents == null) return null
+            if (!usedCents.isFinite() || !limitCents.isFinite()) return null
+            if (limitCents <= 0.0) return null
+            return OnDemandSpend(usedCents = usedCents.coerceAtLeast(0.0), limitCents = limitCents)
+        }
+
+        fun formatUsd(dollars: Double): String {
+            val cents = kotlin.math.round(dollars * 100.0).toLong()
+            return if (cents % 100L == 0L) "$${cents / 100L}"
+            else "$" + "%.2f".format(java.util.Locale.US, dollars)
+        }
+
+        private fun cents(obj: JsonObject, vararg names: String): Double? {
+            val value = obj.num(*names) ?: obj.str(*names)?.toDoubleOrNull() ?: return null
+            if (!value.isFinite()) return null
+            return value
+        }
+    }
+}

@@ -19,4 +19,17 @@
     <string name="notify_pacing_missed">Missed-window and unused-usage alerts</string>
     <string name="quiet_hours">Quiet hours (11 PM–8 AM New York)</string>
     <string name="percent_per_window">Percent of weekly a 5-hour window can burn</string>
+    <string name="notification_channel_quota_name">Quota remaining</string>
+    <string name="notification_channel_quota_description">Alerts when remaining quota crosses a configured threshold. Notifications only — agents are never paused.</string>
+    <string name="quota_alerts">Quota remaining notifications</string>
+    <string name="quota_grok_weekly">Grok Bot weekly quota</string>
+    <string name="quota_cursor_models">Cursor models quota</string>
+    <string name="quota_codex_five">Codex 5-hour quota (off by default)</string>
+    <string name="quota_codex_weekly">Codex weekly quota (off by default)</string>
+    <string name="quota_thresholds">Remaining % thresholds</string>
+    <string name="send_test_notification">Send test notification</string>
+    <string name="settings">Settings</string>
+    <string name="show_on_demand">Show on demand usage</string>
+    <string name="show_on_demand_cursor">Cursor</string>
+    <string name="show_on_demand_grok">Grok Bot</string>
 </resources>

@@ -178,25 +178,27 @@ object NyTimeAgo {
 }
 
 object MeterIds {
-    val CURSOR = setOf("cursor.models", "cursor.other", "cursor.plan_reset")
+    val CURSOR = setOf("cursor.models", "cursor.other", "cursor.on_demand", "cursor.plan_reset")
     const val GROK = "cursor.grok_bot"
-    val CODEX = setOf("openai.five_hour", "openai.weekly")
+    const val GROK_ON_DEMAND = "cursor.grok_on_demand"
+    val CODEX = setOf("openai.five_hour", "openai.weekly", "openai.thirty_day", "openai.code_review")
 
     fun cursorMeters(meters: List<UsageMeter>): List<UsageMeter> =
         listOfNotNull(
             meters.find { it.id == "cursor.models" },
             meters.find { it.id == "cursor.other" },
+            meters.find { it.id == "cursor.on_demand" },
             meters.find { it.id == "cursor.plan_reset" }
         )
 
     fun grokMeters(meters: List<UsageMeter>): List<UsageMeter> =
-        meters.filter { it.id == GROK }
+        listOfNotNull(
+            meters.find { it.id == GROK },
+            meters.find { it.id == GROK_ON_DEMAND }
+        )
 
     fun codexMeters(meters: List<UsageMeter>): List<UsageMeter> =
-        listOfNotNull(
-            meters.find { it.id == "openai.five_hour" },
-            meters.find { it.id == "openai.weekly" }
-        )
+        meters.filter { it.id.startsWith("openai.") }
 
     fun forSection(sectionId: SoftwareSectionId, meters: List<UsageMeter>): List<UsageMeter> =
         when (sectionId) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -11,6 +12,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.currentState
@@ -20,7 +23,6 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.AndroidRemoteViews
-import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -31,6 +33,7 @@ import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -47,7 +50,10 @@ import androidx.glance.text.TextStyle
 import com.usagewidget.MainActivity
 import com.usagewidget.data.AppSettings
 import com.usagewidget.data.UsageRepository
+import com.usagewidget.domain.NyTimeAgo
+import com.usagewidget.domain.OnDemandDisplay
 import com.usagewidget.domain.PaceUrgency
+import com.usagewidget.domain.PaceWindows
 import com.usagewidget.domain.PacingPlanner
 import com.usagewidget.domain.PacingPolicy
 import com.usagewidget.domain.ProviderStatus
@@ -92,12 +98,10 @@ private val Chrome = ColorProvider(Color(0xFF141414), Color(0xFF141414))
 private val Surface = ColorProvider(Color(0xFF1A1A1A), Color(0xFF1A1A1A))
 private val TextOn = ColorProvider(Color(0xFFE8E8E8), Color(0xFFE8E8E8))
 private val Muted = ColorProvider(Color(0xFF9A9A9A), Color(0xFF9A9A9A))
-private val Bar = ColorProvider(Color(0xFF6EA8D8), Color(0xFF6EA8D8))
 private val Warn = ColorProvider(Color(0xFFE08B6E), Color(0xFFE08B6E))
 private val Amber = ColorProvider(Color(0xFFE6B84C), Color(0xFFE6B84C))
 private val Bright = ColorProvider(Color(0xFFF5F5F5), Color(0xFFF5F5F5))
 private val Imminent = ColorProvider(Color(0xFFFF7043), Color(0xFFFF7043))
-private val Track = ColorProvider(Color(0xFF2A2A2A), Color(0xFF2A2A2A))
 
 @Composable
 private fun WidgetContent(
@@ -110,7 +114,18 @@ private fun WidgetContent(
     val compact = size.height < 160.dp
     val now = System.currentTimeMillis()
     val openApp = actionStartActivity(Intent(context, MainActivity::class.java))
-    val sections = UsageSections.from(snapshot, now)
+    val openSettings = actionStartActivity(
+        Intent(context, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_OPEN_SETTINGS, true)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+    )
+    val settings = AppSettings.get(context)
+    val sections = OnDemandDisplay.apply(
+        UsageSections.from(snapshot, now),
+        showCursor = settings.showCursorOnDemand,
+        showGrok = settings.showGrokOnDemand
+    )
     val anyStale = sections.any { it.stale.isStale }
     val rows = widgetRows(sections, includePace = !compact, percentPerWindow, now)
 
@@ -139,12 +154,18 @@ private fun WidgetContent(
                     fontSize = if (compact) 14.sp else 16.sp,
                     fontWeight = FontWeight.Bold
                 ),
-                modifier = GlanceModifier.defaultWeight().wrapContentHeight()
+                modifier = GlanceModifier.wrapContentHeight()
             )
+            Spacer(GlanceModifier.defaultWeight())
             Text(
                 text = "↻",
                 style = TextStyle(color = TextOn, fontSize = 16.sp),
                 modifier = GlanceModifier.wrapContentSize().clickable(actionRunCallback<RefreshAction>())
+            )
+            Text(
+                text = "⚙",
+                style = TextStyle(color = TextOn, fontSize = 16.sp),
+                modifier = GlanceModifier.wrapContentSize().padding(start = 4.dp).clickable(openSettings)
             )
         }
         Spacer(GlanceModifier.height(if (compact) 4.dp else 6.dp))
@@ -156,7 +177,7 @@ private fun WidgetContent(
                 when (row) {
                     is WidgetRow.Gap -> Spacer(GlanceModifier.height(if (compact) 8.dp else 12.dp))
                     is WidgetRow.Header -> SectionHeader(row.title, row.stale)
-                    is WidgetRow.Meter -> MeterGlanceRow(row.meter, now, compact)
+                    is WidgetRow.Meter -> MeterGlanceRow(row.meter, now, compact, size.width)
                     is WidgetRow.SignIn -> SignInRow(row.title, row.providerId)
                     is WidgetRow.Message -> MessageRow(row.text, row.warn, row.emphasize, row.imminent)
                 }
@@ -174,6 +195,23 @@ private fun WidgetContent(
             )
         }
     }
+}
+
+internal fun updatedAgoLabel(
+    snapshot: UsageSnapshot,
+    sections: List<SoftwareSection>,
+    nowMs: Long,
+    compact: Boolean
+): String {
+    val lastSuccess = sections.maxOf { it.health.lastSuccessEpochMs }
+    val epoch = when {
+        lastSuccess > 0L -> lastSuccess
+        snapshot.fetchedAtEpochMs > 0L -> snapshot.fetchedAtEpochMs
+        else -> 0L
+    }
+    if (epoch <= 0L) return if (compact) "—" else "updated —"
+    val ago = NyTimeAgo.format(epoch, nowMs)
+    return if (compact) ago else "updated $ago"
 }
 
 private sealed class WidgetRow {
@@ -325,8 +363,13 @@ private fun MessageRow(
 }
 
 @Composable
-private fun MeterGlanceRow(meter: UsageMeter, nowMs: Long, compact: Boolean) {
-    val remaining = meter.remainingLabel()
+private fun MeterGlanceRow(
+    meter: UsageMeter,
+    nowMs: Long,
+    compact: Boolean,
+    tileWidth: Dp
+) {
+    val used = meter.usedLabel()
     val reset = meter.resetsAtEpochMs?.let { NyTime.formatResetLine(it, nowMs) }
         ?: meter.resetLabel.orEmpty()
     Column(
@@ -340,9 +383,9 @@ private fun MeterGlanceRow(meter: UsageMeter, nowMs: Long, compact: Boolean) {
                 style = TextStyle(color = TextOn, fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 modifier = GlanceModifier.defaultWeight()
             )
-            if (remaining != null) {
+            if (used != null) {
                 Text(
-                    text = remaining,
+                    text = used,
                     style = TextStyle(color = TextOn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 )
             } else if (reset.isNotBlank() && !meter.hasUsageBar) {
@@ -351,9 +394,9 @@ private fun MeterGlanceRow(meter: UsageMeter, nowMs: Long, compact: Boolean) {
         }
         if (meter.hasUsageBar && !compact) {
             Spacer(GlanceModifier.height(4.dp))
-            GlanceBar(meter.displayUsedPercent?.toFloat() ?: 0f)
+            GlancePaceBar(meter, nowMs, tileWidth)
         }
-        if (remaining != null && reset.isNotBlank()) {
+        if (used != null && reset.isNotBlank()) {
             Spacer(GlanceModifier.height(2.dp))
             Text(text = reset, style = resetTextStyle(meter.resetsAtEpochMs, nowMs))
         }
@@ -381,14 +424,23 @@ private fun resetTextStyle(resetAtEpochMs: Long?, nowMs: Long): TextStyle {
 }
 
 @Composable
-private fun GlanceBar(percent: Float) {
-    val used = percent.coerceIn(0f, 100f)
-    val fill = if (used >= 90f) Warn else Bar
-    LinearProgressIndicator(
-        progress = used / 100f,
+private fun GlancePaceBar(
+    meter: UsageMeter,
+    nowMs: Long,
+    tileWidth: Dp
+) {
+    val context = LocalContext.current
+    val density = context.resources.displayMetrics.density
+    val widthPx = (tileWidth.value * density).toInt().coerceAtLeast(8)
+    val heightPx = (7f * density).toInt().coerceAtLeast(4)
+    val used = meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: 0.0
+    val expected = if (meter.isCapBar) null else PaceWindows.expectedUsedPercent(meter, nowMs)
+    val bitmap = PaceBarBitmap.render(used, expected, widthPx, heightPx, capBar = meter.isCapBar)
+    Image(
+        provider = ImageProvider(bitmap),
+        contentDescription = meter.usedLabel() ?: "usage",
         modifier = GlanceModifier.fillMaxWidth().height(7.dp),
-        color = fill,
-        backgroundColor = Track
+        contentScale = ContentScale.FillBounds
     )
 }
 
@@ -398,6 +450,6 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: androidx.glance.action.ActionParameters
     ) {
-        UsageRepository.get(context).refresh(allowHtmlFallback = true)
+        UsageRepository.get(context).refresh(allowHtmlFallback = false)
     }
 }

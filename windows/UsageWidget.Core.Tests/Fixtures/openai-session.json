@@ -1,0 +1,9 @@
+{
+  "user": {
+    "id": "user_REDACTED",
+    "email": "user@example.com",
+    "name": "Example User"
+  },
+  "expires": "2026-12-01T00:00:00.000Z",
+  "accessToken": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ1c2VyX1JFREFDVEVEIiwiYWNjb3VudF9pZCI6ImFjY3RfUkVEQUNURUQifQ.sig"
+}

@@ -130,7 +130,10 @@ object SnapshotMerger {
         diagnosticJson: String? = null
     ): SectionHealth {
         val success = attempt.outcomeEnum == FetchOutcome.SUCCESS
-        val goodMeters = if (success && newMeters.isNotEmpty()) newMeters else previous.lastGoodMeters
+        // A successful fetch is the live truth, including an empty Grok list after a
+        // quota reset (0% used / omitted allowance). Keeping last-good here froze the
+        // pre-reset 65% on screen even after a manual refresh.
+        val goodMeters = if (success) newMeters else previous.lastGoodMeters
         return previous.copy(
             lastAttemptEpochMs = attempt.atEpochMs,
             lastSuccessEpochMs = if (success) attempt.atEpochMs else previous.lastSuccessEpochMs,

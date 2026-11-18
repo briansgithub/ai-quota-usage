@@ -45,22 +45,37 @@ object CursorHtmlExtractor {
             throw IllegalArgumentException("Could not find Cursor usage percentages in page text")
         }
 
+        val onDemand = onDemandFromHtml(text)
         return CursorHtmlUsage(
             plan = CursorPlanUsage(
                 planLabel = planLabel,
                 cursorModelsUsedPercent = cursorModels,
                 otherModelsUsedPercent = otherModels,
-                resetsAtEpochMs = planReset
+                resetsAtEpochMs = planReset,
+                onDemand = onDemand
             ),
             grok = grok?.let {
                 CursorGrokUsage(
                     usedPercent = it,
                     resetsAtEpochMs = grokReset,
                     hasIncludedAllowance = true,
-                    planLabel = planLabel
+                    planLabel = planLabel,
+                    onDemand = onDemand
                 )
             }
         )
+    }
+
+    private fun onDemandFromHtml(text: String): OnDemandSpend? {
+        if (Regex("""on[- ]demand[\s\S]{0,220}disabled""", RegexOption.IGNORE_CASE).containsMatchIn(text)) {
+            return null
+        }
+        val pair = Regex(
+            """(?i)on[- ]demand[\s\S]{0,500}?\$(\d+(?:\.\d{1,2})?)\s*(?:/|of)\s*\$(\d+(?:\.\d{1,2})?)(?!\s*/\s*mo)"""
+        ).find(text) ?: return null
+        val used = pair.groupValues[1].toDoubleOrNull() ?: return null
+        val limit = pair.groupValues[2].toDoubleOrNull() ?: return null
+        return OnDemandSpend.of(used * 100.0, limit * 100.0, enabled = true)
     }
 
     private fun percentUsedNear(text: String, heading: String): Double? {

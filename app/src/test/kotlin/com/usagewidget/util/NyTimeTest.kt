@@ -78,4 +78,31 @@ class NyTimeTest {
         val timed = Instant.parse("2026-11-06T18:43:19.645Z").toEpochMilli()
         assertEquals(timed, NyTime.withClockIfDateTruncated(timed, start))
     }
+
+    @Test
+    fun grokResetOnNov13_2026RollsDateOnlyNextResetForwardAWeek() {
+        val zone = ZoneId.of("America/New_York")
+        val resetInstant = java.time.ZonedDateTime.of(2026, 11, 13, 14, 18, 0, 0, zone)
+            .toInstant()
+            .toEpochMilli()
+        val nextDateOnly = Instant.parse("2026-11-13T00:00:00.000Z").toEpochMilli()
+        val after = resetInstant + 2 * 60_000L
+        val stamped = NyTime.withClockIfDateTruncated(nextDateOnly, resetInstant, after)!!
+        val ny = Instant.ofEpochMilli(stamped).atZone(zone)
+        assertEquals(20, ny.dayOfMonth)
+        assertEquals(11, ny.monthValue)
+        assertEquals(14, ny.hour)
+        assertEquals(18, ny.minute)
+        assertTrue(stamped > after)
+        val beforeReset = resetInstant - 20 * 60_000L
+        val stillThisWeek = NyTime.withClockIfDateTruncated(
+            nextDateOnly,
+            Instant.parse("2026-11-06T19:18:00.000Z").toEpochMilli(),
+            beforeReset
+        )!!
+        val stillNy = Instant.ofEpochMilli(stillThisWeek).atZone(zone)
+        assertEquals(13, stillNy.dayOfMonth)
+        assertEquals(14, stillNy.hour)
+        assertEquals(18, stillNy.minute)
+    }
 }

@@ -57,6 +57,7 @@ class HiddenWebViewExtractor(private val appContext: Context) {
         CookieManager.getInstance().setAcceptCookie(true)
         val webView = WebView(appContext)
         applyLoginSettings(webView)
+        webView.settings.cacheMode = WebSettings.LOAD_NO_CACHE
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
         webView.layout(0, 0, 1, 1)
         return webView

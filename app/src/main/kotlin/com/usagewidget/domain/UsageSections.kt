@@ -24,6 +24,28 @@ data class SoftwareSection(
     val manualResets: ManualResets? = null
 )
 
+object OnDemandDisplay {
+    const val CURSOR_METER = "cursor.on_demand"
+    const val GROK_METER = "cursor.grok_on_demand"
+
+    fun apply(
+        sections: List<SoftwareSection>,
+        showCursor: Boolean,
+        showGrok: Boolean
+    ): List<SoftwareSection> {
+        if (showCursor && showGrok) return sections
+        return sections.map { section ->
+            val hidden = when (section.id) {
+                SoftwareSectionId.CURSOR -> if (showCursor) null else CURSOR_METER
+                SoftwareSectionId.GROK_BOT -> if (showGrok) null else GROK_METER
+                else -> null
+            }
+            if (hidden == null || section.meters.none { it.id == hidden }) section
+            else section.copy(meters = section.meters.filter { it.id != hidden })
+        }
+    }
+}
+
 object UsageSections {
     fun from(
         snapshot: UsageSnapshot,
@@ -48,12 +70,22 @@ object UsageSections {
         val live = listOfNotNull(
             cursor?.meters?.find { it.id == "cursor.models" },
             cursor?.meters?.find { it.id == "cursor.other" },
+            cursor?.meters?.find { it.id == "cursor.on_demand" },
             cursor?.meters?.find { it.id == "cursor.plan_reset" }
                 ?: cursor?.meters
-                    ?.firstOrNull { it.resetsAtEpochMs != null && it.id != "cursor.grok_bot" }
+                    ?.firstOrNull {
+                        it.resetsAtEpochMs != null &&
+                            it.id != "cursor.grok_bot" &&
+                            it.id != "cursor.on_demand" &&
+                            it.id != "cursor.grok_on_demand"
+                    }
                     ?.let { planResetMeter(it.resetsAtEpochMs) }
         )
-        val meters = live.ifEmpty { MeterIds.cursorMeters(health.lastGoodMeters) }
+        val meters = if (health.outcomeEnum == FetchOutcome.SUCCESS) {
+            live
+        } else {
+            live.ifEmpty { MeterIds.cursorMeters(health.lastGoodMeters) }
+        }
         val stale = health.staleView(nowMs)
         return SoftwareSection(
             id = SoftwareSectionId.CURSOR,
@@ -83,7 +115,11 @@ object UsageSections {
         val grok = cursor?.meters?.find { it.id == "cursor.grok_bot" }
             ?.copy(title = "Weekly usage", subtitle = null)
             ?: health.lastGoodMeters.find { it.id == "cursor.grok_bot" }
+                ?.takeIf { health.outcomeEnum != FetchOutcome.SUCCESS }
                 ?.copy(title = "Weekly usage", subtitle = null)
+        val onDemand = cursor?.meters?.find { it.id == MeterIds.GROK_ON_DEMAND }
+            ?: health.lastGoodMeters.find { it.id == MeterIds.GROK_ON_DEMAND }
+                ?.takeIf { health.outcomeEnum != FetchOutcome.SUCCESS }
         val status = when {
             cursor == null -> ProviderStatus.UNSIGNED
             cursor.providerStatus == ProviderStatus.NEEDS_SIGN_IN ||
@@ -109,12 +145,13 @@ object UsageSections {
                 else -> grokOnlyError(cursor?.error)
                     ?: "Grok Bot weekly usage was not in the Cursor response."
             },
-            meters = listOf(
+            meters = listOfNotNull(
                 grok ?: UsageMeter(
                     id = "cursor.grok_bot",
                     title = "Weekly usage",
                     resetLabel = if (status == ProviderStatus.OK) null else "Waiting for data"
-                )
+                ),
+                onDemand
             ),
             health = health,
             stale = stale
@@ -127,13 +164,16 @@ object UsageSections {
         nowMs: Long
     ): SoftwareSection {
         val status = openai?.providerStatus ?: ProviderStatus.UNSIGNED
-        val sourceMeters = openai?.meters.orEmpty().ifEmpty { health.lastGoodMeters }
-        val five = sourceMeters.find { it.id == "openai.five_hour" }
-            ?: sourceMeters.firstOrNull { it.title.contains("5-hour", ignoreCase = true) }
-        val weekly = sourceMeters.find { it.id == "openai.weekly" }
-            ?: sourceMeters.firstOrNull {
-                it.id != five?.id && it.title.contains("Weekly", ignoreCase = true)
-            }
+        val sourceMeters = openai?.meters.orEmpty().ifEmpty {
+            if (health.outcomeEnum == FetchOutcome.SUCCESS) emptyList() else health.lastGoodMeters
+        }
+        val live = MeterIds.codexMeters(sourceMeters).ifEmpty { sourceMeters }
+        val meters = live.ifEmpty {
+            listOf(
+                placeholder("openai.five_hour", "5-hour"),
+                placeholder("openai.weekly", "Weekly")
+            )
+        }
         val stale = health.staleView(nowMs)
         return SoftwareSection(
             id = SoftwareSectionId.CODEX,
@@ -141,10 +181,7 @@ object UsageSections {
             status = status,
             subtitle = openai?.planLabel ?: health.lastGoodPlanLabel,
             error = stale.shortReason ?: openai?.error,
-            meters = listOf(
-                five ?: placeholder("openai.five_hour", "5-hour"),
-                weekly ?: placeholder("openai.weekly", "Weekly")
-            ),
+            meters = meters,
             health = health,
             stale = stale,
             manualResets = openai?.manualResets ?: health.lastGoodManualResets
