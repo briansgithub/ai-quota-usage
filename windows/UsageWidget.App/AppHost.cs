@@ -344,6 +344,7 @@ internal sealed class AppHost : IDisposable
         menu.Items.Add("Sign in to Cursor", null, (_, _) => OpenSignIn(ProviderId.Cursor, SoftwareSectionId.Cursor, false));
         menu.Items.Add("Sign in to Cursor for Grok Bot", null, (_, _) => OpenSignIn(ProviderId.Cursor, SoftwareSectionId.GrokBot, false));
         menu.Items.Add("Sign in to ChatGPT for Codex", null, (_, _) => OpenSignIn(ProviderId.OpenAi, SoftwareSectionId.Codex, false));
+        menu.Items.Add("Sign in to Claude", null, (_, _) => OpenSignIn(ProviderId.Claude, SoftwareSectionId.Claude, false));
         menu.Items.Add(new Forms.ToolStripSeparator());
         _alwaysOnTopItem = new Forms.ToolStripMenuItem("Always on top") { Checked = Settings.AlwaysOnTop, CheckOnClick = true };
         _alwaysOnTopItem.CheckedChanged += (_, _) => SetAlwaysOnTop(_alwaysOnTopItem.Checked);
@@ -381,7 +382,7 @@ internal sealed class AppHost : IDisposable
                 _hoverY = y;
                 _haveHoverPoint = true;
             }
-            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand);
+            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars);
             var wasHidden = !_glance!.IsVisible;
             if (!SameGlance(_shownGlance, model))
             {

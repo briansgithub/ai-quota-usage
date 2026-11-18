@@ -81,6 +81,7 @@ public static class CookieUtil
     {
         ProviderId.Cursor => CursorEndpoints.CookieHosts,
         ProviderId.OpenAi => OpenAiEndpoints.CookieHosts,
+        ProviderId.Claude => ClaudeEndpoints.CookieHosts,
         _ => Array.Empty<string>()
     };
 }
@@ -107,6 +108,9 @@ public sealed class MemoryCookieStore : ICookieStore
                 return true;
             if (provider == ProviderId.OpenAi &&
                 map.Keys.Any(k => k.StartsWith(OpenAiEndpoints.SessionCookiePrefix, StringComparison.OrdinalIgnoreCase)))
+                return true;
+            if (provider == ProviderId.Claude &&
+                map.Any(kv => kv.Key.Equals(ClaudeEndpoints.SessionCookie, StringComparison.OrdinalIgnoreCase) && kv.Value.Length > 0))
                 return true;
         }
         return false;
@@ -175,6 +179,7 @@ public static class SessionPaste
     {
         ProviderId.Cursor => CursorEndpoints.SessionCookie,
         ProviderId.OpenAi => OpenAiEndpoints.SessionCookiePrefix,
+        ProviderId.Claude => ClaudeEndpoints.SessionCookie,
         _ => "session"
     };
 }

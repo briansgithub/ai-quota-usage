@@ -9,10 +9,10 @@ public class UsageSectionsTest
     private const long WeekResetMs = 1_793_404_800_000L;
 
     [Fact]
-    public void EmptySnapshotAlwaysHasThreeSoftwareSections()
+    public void EmptySnapshotAlwaysHasFourSoftwareSections()
     {
         var sections = UsageSections.From(UsageSnapshot.Empty(0L));
-        Assert.Equal(new[] { "Cursor", "Grok Bot", "Codex" }, sections.Select(s => s.Id.Title()).ToArray());
+        Assert.Equal(new[] { "Cursor", "Grok Bot", "Codex", "Claude" }, sections.Select(s => s.Id.Title()).ToArray());
         Assert.Equal(ProviderId.Cursor, sections[0].SignInProvider);
         Assert.Equal(ProviderId.Cursor, sections[1].SignInProvider);
         Assert.Equal(ProviderId.OpenAi, sections[2].SignInProvider);
@@ -20,6 +20,9 @@ public class UsageSectionsTest
         Assert.Equal(ProviderStatus.Unsigned, sections[1].Status);
         Assert.Equal(ProviderStatus.Unsigned, sections[2].Status);
         Assert.Equal(new[] { "openai.five_hour", "openai.weekly" }, sections[2].MeterList.Select(m => m.Id).ToArray());
+        Assert.Equal(ProviderId.Claude, sections[3].SignInProvider);
+        Assert.Equal(ProviderStatus.Unsigned, sections[3].Status);
+        Assert.Equal(new[] { "claude.five_hour", "claude.weekly" }, sections[3].MeterList.Select(m => m.Id).ToArray());
     }
 
     [Fact]

@@ -51,11 +51,13 @@ public static class UsageSections
         var hydrated = HealthSynthesis.Hydrate(snapshot);
         var cursor = hydrated.Provider(ProviderId.Cursor);
         var openai = hydrated.Provider(ProviderId.OpenAi);
+        var claude = hydrated.Provider(ProviderId.Claude);
         return new[]
         {
             CursorSection(cursor, hydrated.Health(SoftwareSectionId.Cursor), nowMs),
             GrokSection(cursor, hydrated.Health(SoftwareSectionId.GrokBot), nowMs),
-            CodexSection(openai, hydrated.Health(SoftwareSectionId.Codex), nowMs)
+            CodexSection(openai, hydrated.Health(SoftwareSectionId.Codex), nowMs),
+            ClaudeSection(claude, hydrated.Health(SoftwareSectionId.Claude), nowMs)
         };
     }
 
@@ -167,6 +169,34 @@ public static class UsageSections
             health,
             stale,
             openai?.ManualResets ?? health.LastGoodManualResets);
+    }
+
+    private static SoftwareSection ClaudeSection(ProviderSnapshot? claude, SectionHealth health, long nowMs)
+    {
+        var status = claude?.ProviderStatus ?? ProviderStatus.Unsigned;
+        var sourceMeters = (claude?.MeterList.Count > 0
+            ? claude.MeterList
+            : health.OutcomeEnum == FetchOutcome.Success
+                ? Array.Empty<UsageMeter>()
+                : health.LastGoodMeterList).ToList();
+        var live = MeterIds.ClaudeMeters(sourceMeters);
+        var meters = live.Count > 0
+            ? live
+            : new List<UsageMeter>
+            {
+                new(ClaudeMeterIds.FiveHour, "Session", ResetLabel: "Waiting for data"),
+                new(ClaudeMeterIds.Weekly, "Weekly", ResetLabel: "Waiting for data")
+            };
+        var stale = health.StaleView(nowMs);
+        return new SoftwareSection(
+            SoftwareSectionId.Claude,
+            ProviderId.Claude,
+            status,
+            claude?.PlanLabel ?? health.LastGoodPlanLabel,
+            stale.ShortReason ?? claude?.Error,
+            meters,
+            health,
+            stale);
     }
 
     private static string? WithoutGrokError(string? error) =>

@@ -2,72 +2,90 @@ namespace UsageWidget;
 
 public static class SnapshotMerger
 {
+    /// <summary>One provider's fetch this round.</summary>
+    public sealed record ProviderRound(ProviderId Provider, ProviderResult Result, bool SignedIn);
+
+    public static IReadOnlyList<SoftwareSectionId> SectionsOf(ProviderId provider) => provider switch
+    {
+        ProviderId.Cursor => new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot },
+        ProviderId.OpenAi => new[] { SoftwareSectionId.Codex },
+        ProviderId.Claude => new[] { SoftwareSectionId.Claude },
+        _ => Array.Empty<SoftwareSectionId>()
+    };
+
+    private static ProviderId ProviderOf(SoftwareSectionId section) => section switch
+    {
+        SoftwareSectionId.Codex => ProviderId.OpenAi,
+        SoftwareSectionId.Claude => ProviderId.Claude,
+        _ => ProviderId.Cursor
+    };
+
+    /// <summary>Cursor + OpenAI only; any other provider keeps its previous state.</summary>
     public static UsageSnapshot Merge(
         UsageSnapshot previous,
         ProviderResult cursorResult,
         ProviderResult openaiResult,
         long nowMs,
         bool cursorSignedIn,
-        bool openaiSignedIn)
+        bool openaiSignedIn) =>
+        Merge(previous, new[]
+        {
+            new ProviderRound(ProviderId.Cursor, cursorResult, cursorSignedIn),
+            new ProviderRound(ProviderId.OpenAi, openaiResult, openaiSignedIn)
+        }, nowMs);
+
+    public static UsageSnapshot Merge(UsageSnapshot previous, IReadOnlyList<ProviderRound> rounds, long nowMs)
     {
         var prior = HealthSynthesis.Hydrate(previous);
         var health = prior.HealthList.ToDictionary(h => h.SectionId, h => h);
         foreach (var id in SoftwareSectionIds.All)
             health.TryAdd(id.Wire(), new SectionHealth(id.Wire()));
 
-        var cursorMetersThisRound = MetersFrom(cursorResult);
-        var openaiMetersThisRound = MetersFrom(openaiResult);
+        var byProvider = rounds.ToDictionary(r => r.Provider);
+        var metersThisRound = rounds.ToDictionary(r => r.Provider, r => MetersFrom(r.Result));
         var attempts = new List<FetchAttempt>();
-        attempts.AddRange(AttemptsOrSynthetic(cursorResult, new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot }, cursorSignedIn, health, nowMs));
-        attempts.AddRange(AttemptsOrSynthetic(openaiResult, new[] { SoftwareSectionId.Codex }, openaiSignedIn, health, nowMs));
+        foreach (var round in rounds)
+            attempts.AddRange(AttemptsOrSynthetic(round.Result, SectionsOf(round.Provider).ToArray(), round.SignedIn, health, nowMs));
 
         foreach (var attempt in attempts)
         {
             SoftwareSectionId section;
             try { section = SoftwareSectionIds.FromWire(attempt.SectionId); }
             catch { continue; }
-            var incoming = MeterIds.ForSection(section, section == SoftwareSectionId.Codex ? openaiMetersThisRound : cursorMetersThisRound);
-            var planLabel = section == SoftwareSectionId.Codex ? SnapshotOf(openaiResult)?.PlanLabel : SnapshotOf(cursorResult)?.PlanLabel;
-            var signedIn = section == SoftwareSectionId.Codex
-                ? openaiSignedIn || attempt.OutcomeEnum == FetchOutcome.AuthExpired
-                : cursorSignedIn || attempt.OutcomeEnum == FetchOutcome.AuthExpired;
-            var incomingManual = section switch
-            {
-                SoftwareSectionId.Codex => SnapshotOf(openaiResult)?.ManualResets,
-                SoftwareSectionId.Cursor => SnapshotOf(cursorResult)?.ManualResets,
-                _ => null
-            };
-            var incomingDiag = section switch
-            {
-                SoftwareSectionId.Codex => SnapshotOf(openaiResult)?.DiagnosticJson,
-                SoftwareSectionId.Cursor => SnapshotOf(cursorResult)?.DiagnosticJson,
-                _ => null
-            };
-            health[section.Wire()] = ApplyAttempt(health[section.Wire()], attempt, incoming, planLabel, signedIn, incomingManual, incomingDiag);
+            var round = byProvider[ProviderOf(section)];
+            var snap = SnapshotOf(round.Result);
+            var incoming = MeterIds.ForSection(section, metersThisRound[round.Provider]);
+            var signedIn = round.SignedIn || attempt.OutcomeEnum == FetchOutcome.AuthExpired;
+            var incomingManual = section is SoftwareSectionId.Codex or SoftwareSectionId.Cursor ? snap?.ManualResets : null;
+            var incomingDiag = section is SoftwareSectionId.GrokBot ? null : snap?.DiagnosticJson;
+            health[section.Wire()] = ApplyAttempt(health[section.Wire()], attempt, incoming, snap?.PlanLabel, signedIn, incomingManual, incomingDiag);
         }
 
-        MarkUnsignedOrExpired(cursorSignedIn, new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot }, attempts, health, nowMs);
-        MarkUnsignedOrExpired(openaiSignedIn, new[] { SoftwareSectionId.Codex }, attempts, health, nowMs);
+        foreach (var round in rounds)
+            MarkUnsignedOrExpired(round.SignedIn, SectionsOf(round.Provider).ToArray(), attempts, health, nowMs);
 
-        var cursorHealth = health[SoftwareSectionId.Cursor.Wire()];
-        var grokHealth = health[SoftwareSectionId.GrokBot.Wire()];
-        var codexHealth = health[SoftwareSectionId.Codex.Wire()];
-
-        var cursorProvider = RebuildProvider(
-            ProviderId.Cursor, prior.Provider(ProviderId.Cursor), SnapshotOf(cursorResult), cursorResult,
-            cursorSignedIn || cursorHealth.SignedIn,
-            cursorHealth.LastGoodMeterList.Concat(grokHealth.LastGoodMeterList).ToList(),
-            cursorHealth.LastGoodPlanLabel, cursorHealth.LastGoodManualResets, cursorHealth.LastGoodDiagnosticJson);
-        var openaiProvider = RebuildProvider(
-            ProviderId.OpenAi, prior.Provider(ProviderId.OpenAi), SnapshotOf(openaiResult), openaiResult,
-            openaiSignedIn || codexHealth.SignedIn,
-            codexHealth.LastGoodMeterList.ToList(),
-            codexHealth.LastGoodPlanLabel, codexHealth.LastGoodManualResets, codexHealth.LastGoodDiagnosticJson);
+        var providers = new List<ProviderSnapshot>();
+        foreach (var id in new[] { ProviderId.Cursor, ProviderId.OpenAi, ProviderId.Claude })
+        {
+            if (!byProvider.TryGetValue(id, out var round))
+            {
+                if (prior.Provider(id) is { } kept) providers.Add(kept);
+                continue;
+            }
+            var sections = SectionsOf(id);
+            var primary = health[sections[0].Wire()];
+            var meters = sections.SelectMany(s => health[s.Wire()].LastGoodMeterList).ToList();
+            providers.Add(RebuildProvider(
+                id, prior.Provider(id), SnapshotOf(round.Result), round.Result,
+                round.SignedIn || primary.SignedIn,
+                meters,
+                primary.LastGoodPlanLabel, primary.LastGoodManualResets, primary.LastGoodDiagnosticJson));
+        }
 
         var log = prior.Attempts.Concat(attempts).TakeLast(StalePolicy.AttemptLogLimit).ToList();
         return new UsageSnapshot(
             FetchedAtEpochMs: nowMs,
-            Providers: new[] { cursorProvider, openaiProvider },
+            Providers: providers,
             SectionHealth: SoftwareSectionIds.All.Select(id => health[id.Wire()]).ToList(),
             AttemptLog: log);
     }
@@ -106,9 +124,7 @@ public static class SnapshotMerger
 
     public static UsageSnapshot ClearForSignOut(UsageSnapshot previous, ProviderId provider)
     {
-        var sections = provider == ProviderId.Cursor
-            ? new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot }
-            : new[] { SoftwareSectionId.Codex };
+        var sections = SectionsOf(provider);
         var health = previous.HealthList.ToList();
         foreach (var id in SoftwareSectionIds.All)
         {

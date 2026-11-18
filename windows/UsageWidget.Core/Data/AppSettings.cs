@@ -60,8 +60,23 @@ public sealed class AppSettings
     public bool QuotaCursorModelsEnabled { get => _state.QuotaCursorModelsEnabled; set => Set(s => s with { QuotaCursorModelsEnabled = value }); }
     public bool QuotaCodexFiveHourEnabled { get => _state.QuotaCodexFiveHourEnabled; set => Set(s => s with { QuotaCodexFiveHourEnabled = value }); }
     public bool QuotaCodexWeeklyEnabled { get => _state.QuotaCodexWeeklyEnabled; set => Set(s => s with { QuotaCodexWeeklyEnabled = value }); }
+    public bool QuotaClaudeFiveHourEnabled { get => _state.QuotaClaudeFiveHourEnabled; set => Set(s => s with { QuotaClaudeFiveHourEnabled = value }); }
+    public bool QuotaClaudeWeeklyEnabled { get => _state.QuotaClaudeWeeklyEnabled; set => Set(s => s with { QuotaClaudeWeeklyEnabled = value }); }
     public bool ShowCursorOnDemand { get => _state.ShowCursorOnDemand; set => Set(s => s with { ShowCursorOnDemand = value }); }
     public bool ShowGrokOnDemand { get => _state.ShowGrokOnDemand; set => Set(s => s with { ShowGrokOnDemand = value }); }
+
+    /// <summary>Meter ids hidden on the mini panel and tray popup (see <see cref="WidgetBars"/>).</summary>
+    public IReadOnlySet<string> HiddenWidgetBars =>
+        (_state.HiddenWidgetBars ?? new List<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsWidgetBarVisible(string meterId) => !HiddenWidgetBars.Contains(meterId);
+
+    public void SetWidgetBarVisible(string meterId, bool visible)
+    {
+        var set = HiddenWidgetBars.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (visible ? !set.Remove(meterId) : !set.Add(meterId)) return;
+        Set(s => s with { HiddenWidgetBars = set.OrderBy(x => x, StringComparer.Ordinal).ToList() });
+    }
 
     public AlertPreferences AlertPreferencesValue() => new(
         PercentPerFiveHourWindow,
@@ -80,6 +95,8 @@ public sealed class AppSettings
         if (QuotaCursorModelsEnabled) enabled.Add(QuotaRuleId.CursorModels.Wire());
         if (QuotaCodexFiveHourEnabled) enabled.Add(QuotaRuleId.CodexFiveHour.Wire());
         if (QuotaCodexWeeklyEnabled) enabled.Add(QuotaRuleId.CodexWeekly.Wire());
+        if (QuotaClaudeFiveHourEnabled) enabled.Add(QuotaRuleId.ClaudeFiveHour.Wire());
+        if (QuotaClaudeWeeklyEnabled) enabled.Add(QuotaRuleId.ClaudeWeekly.Wire());
         return new QuotaThresholdPreferences(
             QuotaAlertsEnabled,
             QuotaThresholds.ParseCsv(QuotaThresholdsCsv),
@@ -152,9 +169,12 @@ public sealed record SettingsState(
     bool QuotaCursorModelsEnabled = true,
     bool QuotaCodexFiveHourEnabled = false,
     bool QuotaCodexWeeklyEnabled = false,
+    bool QuotaClaudeFiveHourEnabled = true,
+    bool QuotaClaudeWeeklyEnabled = true,
     Dictionary<string, QuotaThresholdState>? QuotaFiredStates = null,
     bool ShowCursorOnDemand = true,
-    bool ShowGrokOnDemand = true);
+    bool ShowGrokOnDemand = true,
+    List<string>? HiddenWidgetBars = null);
 
 public interface ISettingsStore
 {

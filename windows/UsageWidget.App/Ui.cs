@@ -363,6 +363,7 @@ internal sealed class MiniPanelWindow : Window
     private readonly AppHost _host;
     private readonly StackPanel _body;
     private readonly TextBlock _countdown;
+    private readonly DockPanel _footer;
     private readonly CaptionBar _caption = new();
     private readonly MenuItem _keepOnTop;
     private readonly Grid _titleStrip;
@@ -418,12 +419,9 @@ internal sealed class MiniPanelWindow : Window
         _pinButton = Ui.GlyphButton("\uE840", "Always on top", () => ToggleAlwaysOnTop("pin-button"), MiniChrome.PinWidth);
         _pinButton.HorizontalAlignment = HorizontalAlignment.Left;
         _pinButton.VerticalAlignment = VerticalAlignment.Center;
-        var gear = Ui.GlyphButton("\uE713", "Settings", () => OnDemandSettingsWindow.Show(host.Settings, this), MiniChrome.GearWidth);
-        gear.HorizontalAlignment = HorizontalAlignment.Right;
-        gear.VerticalAlignment = VerticalAlignment.Center;
         var titleLabel = Ui.T("Usage", Theme.TextBrush, 13, FontWeights.SemiBold);
         titleLabel.VerticalAlignment = VerticalAlignment.Center;
-        titleLabel.Margin = new Thickness(MiniChrome.PinWidth, 0, MiniChrome.CaptionButtonsWidth + MiniChrome.GearWidth, 0);
+        titleLabel.Margin = new Thickness(MiniChrome.PinWidth, 0, MiniChrome.CaptionButtonsWidth, 0);
         titleLabel.IsHitTestVisible = false;
         _feedback = Ui.T("", Theme.BrightBrush, 11, FontWeights.SemiBold);
         _feedback.HorizontalAlignment = HorizontalAlignment.Center;
@@ -434,7 +432,6 @@ internal sealed class MiniPanelWindow : Window
         _caption.IsHitTestVisible = false;
         _caption.HorizontalAlignment = HorizontalAlignment.Right;
         _caption.VerticalAlignment = VerticalAlignment.Center;
-        _caption.Margin = new Thickness(0, 0, MiniChrome.GearWidth, 0);
         _caption.Minimize += () => _host.HideMiniToTray();
         _caption.Maximize += () => _host.ToggleExpandedFromMini();
         _caption.CloseApp += () => _host.ExitApp();
@@ -442,7 +439,6 @@ internal sealed class MiniPanelWindow : Window
         _titleStrip.Children.Add(_pinButton);
         _titleStrip.Children.Add(_feedback);
         _titleStrip.Children.Add(_caption);
-        _titleStrip.Children.Add(gear);
         _keepOnTop = new MenuItem { Header = "Keep on top", IsCheckable = true, IsChecked = host.Settings.AlwaysOnTop };
         _keepOnTop.Click += (_, _) => _host.SetAlwaysOnTop(_keepOnTop.IsChecked == true);
         _titleStrip.ContextMenu = new ContextMenu { Items = { _keepOnTop } };
@@ -453,14 +449,26 @@ internal sealed class MiniPanelWindow : Window
         _body = new StackPanel { Margin = new Thickness(10, 6, 10, 2) };
         _countdown = Ui.T("next 15:00", Theme.MutedBrush, 11);
         _countdown.Opacity = 0.7;
-        _countdown.Margin = new Thickness(10, 0, 10, 6);
+        _countdown.VerticalAlignment = VerticalAlignment.Center;
+        var refresh = Ui.GlyphButton("\uE72C", "Refresh now", () => _ = _host.RefreshNow(), MiniChrome.FooterButtonWidth);
+        var gear = Ui.GlyphButton("\uE713", "Settings", () => OnDemandSettingsWindow.Show(host.Settings, this), MiniChrome.FooterButtonWidth);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        foreach (var button in new[] { refresh, gear })
+        {
+            button.Height = MiniChrome.FooterHeight;
+            actions.Children.Add(button);
+        }
+        DockPanel.SetDock(actions, Dock.Right);
+        _footer = new DockPanel { Margin = new Thickness(10, 0, 4, 4), LastChildFill = true };
+        _footer.Children.Add(actions);
+        _footer.Children.Add(_countdown);
 
         Grid.SetRow(_titleStrip, 0);
         Grid.SetRow(_body, 1);
-        Grid.SetRow(_countdown, 2);
+        Grid.SetRow(_footer, 2);
         _inner.Children.Add(_titleStrip);
         _inner.Children.Add(_body);
-        _inner.Children.Add(_countdown);
+        _inner.Children.Add(_footer);
         chrome.Child = _inner;
         chrome.MouseEnter += (_, _) => FadeCaption(true);
         chrome.MouseLeave += (_, _) => FadeCaption(false);
@@ -600,10 +608,10 @@ internal sealed class MiniPanelWindow : Window
     {
         var bodyAvail = Math.Max(1, innerWidth - _body.Margin.Left - _body.Margin.Right);
         _body.Measure(new Size(bodyAvail, double.PositiveInfinity));
-        var countAvail = Math.Max(1, innerWidth - _countdown.Margin.Left - _countdown.Margin.Right);
-        _countdown.Measure(new Size(countAvail, double.PositiveInfinity));
+        var footAvail = Math.Max(1, innerWidth - _footer.Margin.Left - _footer.Margin.Right);
+        _footer.Measure(new Size(footAvail, double.PositiveInfinity));
         return _body.DesiredSize.Height + _body.Margin.Top + _body.Margin.Bottom
-             + _countdown.DesiredSize.Height + _countdown.Margin.Top + _countdown.Margin.Bottom;
+             + _footer.DesiredSize.Height + _footer.Margin.Top + _footer.Margin.Bottom;
     }
 
     private (double ThX, double ThY, int DoubleMs, double DoubleX, double DoubleY) GestureParams()
@@ -717,7 +725,8 @@ internal sealed class MiniPanelWindow : Window
                 Child = Ui.T($"Stale · {stale[0].ShortReason}", Theme.StaleBrush(worst), 11)
             });
         }
-        foreach (var section in OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), _host.Settings.ShowCursorOnDemand, _host.Settings.ShowGrokOnDemand))
+        var shown = OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), _host.Settings.ShowCursorOnDemand, _host.Settings.ShowGrokOnDemand);
+        foreach (var section in WidgetBars.Apply(shown, _host.Settings.HiddenWidgetBars))
             _body.Children.Add(Ui.SectionCard(section, nowMs, _host.Settings.PercentPerFiveHourWindow, compact: true, _host.OpenSignIn, _host.SignOutSection, () => _ = _host.RefreshNow()));
         if (_body.Children.Count > 0 && _body.Children[^1] is FrameworkElement last)
             last.Margin = new Thickness(last.Margin.Left, last.Margin.Top, last.Margin.Right, 0);
@@ -763,12 +772,15 @@ internal sealed class DashboardWindow : Window
 
         var root = new DockPanel { Margin = new Thickness(16) };
         var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
-        var refresh = Ui.Primary("Refresh", (_, _) => _ = _host.RefreshNow());
-        DockPanel.SetDock(refresh, Dock.Right);
-        header.Children.Add(refresh);
+        // Refresh, then Settings at the far right (same order as the Android app bar).
         var gear = Ui.GlyphButton("\uE713", "Settings", () => OnDemandSettingsWindow.Show(_host.Settings, this), 36);
+        gear.Margin = new Thickness(6, 0, 0, 0);
         DockPanel.SetDock(gear, Dock.Right);
         header.Children.Add(gear);
+        var refresh = Ui.Primary("Refresh", (_, _) => _ = _host.RefreshNow());
+        refresh.VerticalAlignment = VerticalAlignment.Center;
+        DockPanel.SetDock(refresh, Dock.Right);
+        header.Children.Add(refresh);
         header.Children.Add(Ui.T("Usage", Theme.TextBrush, 22, FontWeights.SemiBold));
         DockPanel.SetDock(header, Dock.Top);
         _status = Ui.T("", Theme.MutedBrush, 12);
@@ -860,6 +872,8 @@ internal sealed class DashboardWindow : Window
         stack.Children.Add(Ui.Check("Cursor models quota", s.QuotaCursorModelsEnabled, v => s.QuotaCursorModelsEnabled = v));
         stack.Children.Add(Ui.Check("Codex 5-hour quota (off by default)", s.QuotaCodexFiveHourEnabled, v => s.QuotaCodexFiveHourEnabled = v));
         stack.Children.Add(Ui.Check("Codex weekly quota (off by default)", s.QuotaCodexWeeklyEnabled, v => s.QuotaCodexWeeklyEnabled = v));
+        stack.Children.Add(Ui.Check("Claude session quota", s.QuotaClaudeFiveHourEnabled, v => s.QuotaClaudeFiveHourEnabled = v));
+        stack.Children.Add(Ui.Check("Claude weekly quota", s.QuotaClaudeWeeklyEnabled, v => s.QuotaClaudeWeeklyEnabled = v));
         stack.Children.Add(Ui.T("Remaining % thresholds (comma-separated)", Theme.MutedBrush, 12));
         var thresholds = new TextBox
         {
@@ -904,21 +918,196 @@ internal sealed class OnDemandSettingsWindow : Window
 {
     private static OnDemandSettingsWindow? _open;
 
+    private static readonly Brush PillOnBrush = Frozen(Color.FromRgb(0x1E, 0x3A, 0x52));
+    private static readonly Brush PillOnHoverBrush = Frozen(Color.FromRgb(0x25, 0x47, 0x63));
+    private static readonly Brush PillOffHoverBrush = Frozen(Color.FromRgb(0x22, 0x22, 0x22));
+    private const string EyeGlyph = "\uE890";
+
+    private readonly AppSettings _settings;
+    private readonly StackPanel _body = new();
+
     private OnDemandSettingsWindow(AppSettings settings)
     {
+        _settings = settings;
         Title = "Settings";
         Icon = AppBranding.ImageSource;
         WindowStyle = WindowStyle.ToolWindow;
         ResizeMode = ResizeMode.NoResize;
-        SizeToContent = SizeToContent.WidthAndHeight;
+        SizeToContent = SizeToContent.Height;
+        Width = 410;
         ShowInTaskbar = false;
-        Background = Theme.ChromeBrush;
-        var stack = new StackPanel { Margin = new Thickness(16), MinWidth = 240 };
-        stack.Children.Add(Ui.T("Show on demand usage", Theme.TextBrush, 15, FontWeights.SemiBold));
-        stack.Children.Add(Ui.T("Hides that dollar-cap bar. Included quota bars stay.", Theme.MutedBrush, 12));
-        stack.Children.Add(Ui.Check("Cursor", settings.ShowCursorOnDemand, v => settings.ShowCursorOnDemand = v));
-        stack.Children.Add(Ui.Check("Grok Bot", settings.ShowGrokOnDemand, v => settings.ShowGrokOnDemand = v));
-        Content = stack;
+        Background = Theme.SurfaceBrush;
+        UseLayoutRounding = true;
+
+        var done = Ui.Ghost("Done", (_, _) => Close());
+        done.HorizontalAlignment = HorizontalAlignment.Right;
+        done.BorderThickness = new Thickness(0);
+        done.Foreground = Theme.BarBrush;
+        done.Margin = new Thickness(0, 4, 0, 0);
+        DockPanel.SetDock(done, Dock.Bottom);
+
+        var root = new DockPanel { Margin = new Thickness(18, 14, 18, 12) };
+        root.Children.Add(done);
+        root.Children.Add(new ScrollViewer
+        {
+            Content = _body,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 640
+        });
+        Content = root;
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Same layout as the Android Settings dialog: on-demand spend (everywhere) first,
+    /// then one row of show/hide pills per service for the mini panel and tray popup.
+    /// </summary>
+    private void Rebuild()
+    {
+        _body.Children.Clear();
+        _body.Children.Add(SectionHeader("ON-DEMAND SPEND", "Dollar-cap bars, everywhere they appear."));
+        var spend = PillRow();
+        spend.Children.Add(Pill("Cursor", _settings.ShowCursorOnDemand, true, v => _settings.ShowCursorOnDemand = v));
+        spend.Children.Add(Pill("Grok Bot", _settings.ShowGrokOnDemand, true, v => _settings.ShowGrokOnDemand = v));
+        _body.Children.Add(spend);
+
+        var widgetHeader = SectionHeader("WIDGET BARS", "Click a bar to show or hide it on the mini panel and tray popup.");
+        widgetHeader.Margin = new Thickness(0, 10, 0, 6);
+        _body.Children.Add(widgetHeader);
+
+        var hidden = _settings.HiddenWidgetBars;
+        var forcedOff = new HashSet<string>();
+        if (!_settings.ShowCursorOnDemand) forcedOff.Add(OnDemandDisplay.CursorMeter);
+        if (!_settings.ShowGrokOnDemand) forcedOff.Add(OnDemandDisplay.GrokMeter);
+        foreach (var group in WidgetBars.Catalog.GroupBy(o => o.Section))
+        {
+            var allHidden = group.All(o => hidden.Contains(o.MeterId) || forcedOff.Contains(o.MeterId));
+            _body.Children.Add(ServiceHeader(group.Key, allHidden));
+            var row = PillRow();
+            foreach (var option in group)
+            {
+                var id = option.MeterId;
+                var forced = forcedOff.Contains(id);
+                row.Children.Add(Pill(option.Label, !forced && !hidden.Contains(id), !forced, v => _settings.SetWidgetBarVisible(id, v)));
+            }
+            _body.Children.Add(row);
+        }
+    }
+
+    private static FrameworkElement SectionHeader(string title, string hint)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
+        stack.Children.Add(Ui.T(title, Theme.BarBrush, 11, FontWeights.SemiBold));
+        var sub = Ui.T(hint, Theme.MutedBrush, 12);
+        sub.Margin = new Thickness(0, 2, 0, 0);
+        stack.Children.Add(sub);
+        return stack;
+    }
+
+    private static FrameworkElement ServiceHeader(SoftwareSectionId section, bool allHidden)
+    {
+        var brush = allHidden ? Theme.MutedBrush : Theme.TextBrush;
+        var row = new DockPanel { Margin = new Thickness(0, 4, 0, 5), LastChildFill = true };
+        if (allHidden)
+        {
+            var tag = Ui.T("Hidden", Theme.MutedBrush, 11);
+            tag.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(tag, Dock.Right);
+            row.Children.Add(tag);
+        }
+        if (ServiceLogos.Icon(section, brush) is { } logo)
+        {
+            logo.Margin = new Thickness(0, 0, 8, 0);
+            logo.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(logo, Dock.Left);
+            row.Children.Add(logo);
+        }
+        var name = Ui.T(section.Title(), brush, 13, FontWeights.SemiBold);
+        name.VerticalAlignment = VerticalAlignment.Center;
+        row.Children.Add(name);
+        return row;
+    }
+
+    private static WrapPanel PillRow() => new() { Orientation = Orientation.Horizontal };
+
+    /// <summary>
+    /// Show/hide pill: eye = shown, slashed eye = hidden; same width either way so the row
+    /// does not reflow. A ToggleButton, so Tab/Space and screen readers work.
+    /// </summary>
+    private ToggleButton Pill(string label, bool shown, bool enabled, Action<bool> onChange)
+    {
+        // The slashed eye is a line drawn over the eye glyph: Segoe MDL2's "Hide" (ED1A) is
+        // missing on older Windows 10 builds and renders as an empty box.
+        var glyph = new Grid { Width = 13, Height = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) };
+        glyph.Children.Add(new TextBlock
+        {
+            Text = EyeGlyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 12,
+            Foreground = shown ? Theme.BarBrush : Theme.MutedBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        if (!shown)
+        {
+            glyph.Children.Add(new Line
+            {
+                X1 = 1.5, Y1 = 11.5, X2 = 11.5, Y2 = 1.5,
+                Stroke = Theme.MutedBrush,
+                StrokeThickness = 1.3,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round
+            });
+        }
+        var text = Ui.T(label, shown ? Theme.TextBrush : Theme.MutedBrush, 12.5, FontWeights.Medium, TextWrapping.NoWrap);
+        text.VerticalAlignment = VerticalAlignment.Center;
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(glyph);
+        content.Children.Add(text);
+
+        var pill = new ToggleButton
+        {
+            IsChecked = shown,
+            IsEnabled = enabled,
+            Content = content,
+            Background = shown ? PillOnBrush : Brushes.Transparent,
+            BorderBrush = shown ? Brushes.Transparent : Theme.OutlineBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(9, 5, 11, 5),
+            Margin = new Thickness(0, 0, 6, 6),
+            Cursor = Cursors.Hand,
+            Opacity = enabled ? 1 : 0.45,
+            ToolTip = enabled
+                ? (shown ? $"Shown. Click to hide {label}." : $"Hidden. Click to show {label}.")
+                : "Turned off under On-demand spend"
+        };
+        System.Windows.Automation.AutomationProperties.SetName(pill, label);
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        pill.Template = new ControlTemplate(typeof(ToggleButton)) { VisualTree = border };
+        pill.MouseEnter += (_, _) => { if (pill.IsEnabled) pill.Background = shown ? PillOnHoverBrush : PillOffHoverBrush; };
+        pill.MouseLeave += (_, _) => pill.Background = shown ? PillOnBrush : Brushes.Transparent;
+        pill.Click += (_, _) =>
+        {
+            onChange(!shown);
+            // Rebuild after the click finishes so linked states (forced-off, "Hidden") update.
+            Dispatcher.BeginInvoke(Rebuild);
+        };
+        return pill;
+    }
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     public static void Show(AppSettings settings, Window? owner)

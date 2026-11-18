@@ -13,6 +13,8 @@ public static class PaceWindows
         "openai.five_hour" => PacingPolicy.WindowMs,
         "openai.weekly" => PacingPolicy.GrokPeriodMs,
         "openai.thirty_day" => 30L * 24 * 60 * 60 * 1000,
+        ClaudeMeterIds.FiveHour => ClaudeMeterIds.FiveHourMs,
+        ClaudeMeterIds.Weekly or ClaudeMeterIds.WeeklyOpus or ClaudeMeterIds.WeeklySonnet => ClaudeMeterIds.WeekMs,
         "cursor.grok_bot" => PacingPolicy.GrokPeriodMs,
         "cursor.models" or "cursor.other" => PacingPolicy.CursorPeriodMs,
         _ => null

@@ -59,7 +59,12 @@ internal sealed class SignInWindow : Window
             await WebViewCookieBridge.RestoreAsync(_web, _host.Cookies, _provider);
         _web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
         _web.CoreWebView2.Settings.AreDevToolsEnabled = false;
-        var url = _provider == ProviderId.Cursor ? CursorEndpoints.LoginPage : OpenAiEndpoints.LoginPage;
+        var url = _provider switch
+        {
+            ProviderId.Cursor => CursorEndpoints.LoginPage,
+            ProviderId.Claude => ClaudeEndpoints.LoginPage,
+            _ => OpenAiEndpoints.LoginPage
+        };
         _web.CoreWebView2.Navigate(url);
         _poll.Tick += async (_, _) => await PollSession();
         _poll.Start();

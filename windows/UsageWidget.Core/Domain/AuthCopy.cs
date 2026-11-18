@@ -28,6 +28,7 @@ public static class AuthCopy
     {
         SoftwareSectionId.GrokBot => "Sign in to Cursor for Grok Bot",
         SoftwareSectionId.Codex => "Sign in to ChatGPT for Codex",
+        SoftwareSectionId.Claude => "Sign in to Claude",
         _ => "Sign in to Cursor"
     };
 
@@ -37,6 +38,8 @@ public static class AuthCopy
             "Grok Bot weekly usage is a Cursor product. Sign in to cursor.com here. There is no separate xAI/Grok login.",
         SoftwareSectionId.Codex =>
             "Codex usage comes from your ChatGPT session. Sign in to chatgpt.com here.",
+        SoftwareSectionId.Claude =>
+            "Claude usage (session and weekly limits) comes from your claude.ai session. Sign in to claude.ai here.",
         _ => "Sign in to cursor.com here. This same session also loads Grok Bot."
     };
 

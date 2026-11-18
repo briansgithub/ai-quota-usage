@@ -174,12 +174,16 @@ public static class MeterIds
     public static List<UsageMeter> CodexMeters(IEnumerable<UsageMeter> meters) =>
         meters.Where(m => m.Id.StartsWith("openai.")).ToList();
 
+    public static List<UsageMeter> ClaudeMeters(IEnumerable<UsageMeter> meters) =>
+        meters.Where(m => m.Id.StartsWith("claude.")).ToList();
+
     public static List<UsageMeter> ForSection(SoftwareSectionId sectionId, IEnumerable<UsageMeter> meters) =>
         sectionId switch
         {
             SoftwareSectionId.Cursor => CursorMeters(meters),
             SoftwareSectionId.GrokBot => GrokMeters(meters),
             SoftwareSectionId.Codex => CodexMeters(meters),
+            SoftwareSectionId.Claude => ClaudeMeters(meters),
             _ => new List<UsageMeter>()
         };
 }
@@ -191,12 +195,14 @@ public static class HealthSynthesis
         if (snapshot.HealthList.Count > 0) return snapshot;
         var cursor = snapshot.Provider(ProviderId.Cursor);
         var openai = snapshot.Provider(ProviderId.OpenAi);
+        var claude = snapshot.Provider(ProviderId.Claude);
         var at = snapshot.FetchedAtEpochMs;
         var health = new[]
         {
             Synthesized(SoftwareSectionId.Cursor, cursor, MeterIds.CursorMeters(cursor?.MeterList ?? Array.Empty<UsageMeter>()), at),
             Synthesized(SoftwareSectionId.GrokBot, cursor, MeterIds.GrokMeters(cursor?.MeterList ?? Array.Empty<UsageMeter>()), at),
-            Synthesized(SoftwareSectionId.Codex, openai, MeterIds.CodexMeters(openai?.MeterList ?? Array.Empty<UsageMeter>()), at)
+            Synthesized(SoftwareSectionId.Codex, openai, MeterIds.CodexMeters(openai?.MeterList ?? Array.Empty<UsageMeter>()), at),
+            Synthesized(SoftwareSectionId.Claude, claude, MeterIds.ClaudeMeters(claude?.MeterList ?? Array.Empty<UsageMeter>()), at)
         };
         return snapshot with { SectionHealth = health };
     }

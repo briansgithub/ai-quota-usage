@@ -123,7 +123,7 @@ internal sealed class DpapiCookieStore : ICookieStore
         lock (_gate)
         {
             var dump = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var host in CursorEndpoints.CookieHosts.Concat(OpenAiEndpoints.CookieHosts))
+            foreach (var host in CursorEndpoints.CookieHosts.Concat(OpenAiEndpoints.CookieHosts).Concat(ClaudeEndpoints.CookieHosts))
             {
                 var header = _memory.GetHeader(host);
                 if (!string.IsNullOrWhiteSpace(header))
@@ -219,6 +219,8 @@ internal sealed class WebViewHtmlExtractor : IHtmlExtractor
 
     public Task<string> ExtractPageTextAsync(ProviderId provider, CancellationToken cancellationToken = default)
     {
+        if (provider == ProviderId.Claude)
+            return _dispatcher.InvokeAsync(() => ReadClaudeUsageJsonOnUi(cancellationToken)).Task.Unwrap();
         var url = provider == ProviderId.Cursor ? CursorEndpoints.SpendingPage : OpenAiEndpoints.UsagePage;
         return _dispatcher.InvokeAsync(() => ExtractOnUi(url, cancellationToken)).Task.Unwrap();
     }
@@ -273,6 +275,73 @@ internal sealed class WebViewHtmlExtractor : IHtmlExtractor
         }
     }
 
+    /// <summary>
+    /// claude.ai's JSON API sits behind Cloudflare, which can challenge plain HTTP clients.
+    /// The signed-in WebView2 profile is a real browser, so read the same JSON documents
+    /// there: organizations first (for the org uuid), then that org's usage.
+    /// </summary>
+    private static async Task<string> ReadClaudeUsageJsonOnUi(CancellationToken cancellationToken)
+    {
+        var window = new Window
+        {
+            Width = 1,
+            Height = 1,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            Opacity = 0,
+            ShowActivated = false,
+            Title = "Usage Widget extract"
+        };
+        var web = new WebView2();
+        window.Content = web;
+        window.Show();
+        try
+        {
+            var env = await CoreWebView2Environment.CreateAsync(userDataFolder: Paths.WebViewUserData);
+            await web.EnsureCoreWebView2Async(env);
+            var orgs = await ReadJsonDocumentAsync(web, ClaudeEndpoints.Organizations, cancellationToken);
+            if (ClaudeUsageClient.IsAuthErrorBody(orgs)) return orgs;
+            string? lastActive = null;
+            try
+            {
+                var cookies = await web.CoreWebView2.CookieManager.GetCookiesAsync(ClaudeEndpoints.Origin);
+                lastActive = cookies.FirstOrDefault(c => c.Name == ClaudeEndpoints.LastActiveOrgCookie)?.Value;
+            }
+            catch { /* optional */ }
+            var orgId = ClaudeUsageParser.ParseOrgId(orgs, lastActive);
+            return await ReadJsonDocumentAsync(web, ClaudeEndpoints.Usage(orgId), cancellationToken);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// Navigates to a JSON URL and polls the body text until it is JSON (a Cloudflare
+    /// interstitial reloads itself into the real document) or the timeout passes.
+    /// </summary>
+    private static async Task<string> ReadJsonDocumentAsync(WebView2 web, string url, CancellationToken cancellationToken)
+    {
+        web.CoreWebView2.Navigate(url);
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var last = "";
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(500, cancellationToken);
+            try
+            {
+                var raw = await web.ExecuteScriptAsync("document.body ? document.body.innerText : ''");
+                last = UnquoteJsString(raw);
+            }
+            catch { continue; }
+            if (HttpBodies.LooksLikeJson(last)) return last.Trim();
+        }
+        if (string.IsNullOrWhiteSpace(last))
+            throw new TimeoutException("Timed out reading claude.ai usage");
+        throw new ProviderHttpException(0, "claude.ai did not return JSON in the browser", url);
+    }
+
     internal static string UnquoteJsString(string raw)
     {
         if (string.IsNullOrEmpty(raw) || raw == "null") return "";
@@ -283,10 +352,12 @@ internal sealed class WebViewHtmlExtractor : IHtmlExtractor
 
 internal static class WebViewCookieBridge
 {
-    public static bool IsSessionCookie(ProviderId provider, string name) =>
-        provider == ProviderId.Cursor
-            ? name.Equals(CursorEndpoints.SessionCookie, StringComparison.OrdinalIgnoreCase)
-            : name.StartsWith(OpenAiEndpoints.SessionCookiePrefix, StringComparison.OrdinalIgnoreCase);
+    public static bool IsSessionCookie(ProviderId provider, string name) => provider switch
+    {
+        ProviderId.Cursor => name.Equals(CursorEndpoints.SessionCookie, StringComparison.OrdinalIgnoreCase),
+        ProviderId.Claude => name.Equals(ClaudeEndpoints.SessionCookie, StringComparison.OrdinalIgnoreCase),
+        _ => name.StartsWith(OpenAiEndpoints.SessionCookiePrefix, StringComparison.OrdinalIgnoreCase)
+    };
 
     public static async Task CaptureAsync(WebView2 web, ICookieStore store, ProviderId provider)
     {

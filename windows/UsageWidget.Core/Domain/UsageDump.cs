@@ -22,7 +22,7 @@ public static class UsageDump
     private static readonly Regex Jwt = new(@"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+", RegexOptions.Compiled);
     private static readonly Regex Bearer = new(@"(?i)Bearer\s+[A-Za-z0-9._\-+=/]+", RegexOptions.Compiled);
     private static readonly Regex CookiePair = new(
-        @"(?i)(WorkosCursorSessionToken|__Secure-next-auth\.session-token(?:\.\d+)?|Cookie|Authorization)\s*[:=]\s*\S+",
+        @"(?i)(WorkosCursorSessionToken|__Secure-next-auth\.session-token(?:\.\d+)?|sessionKey|Cookie|Authorization)\s*[:=]\s*\S+",
         RegexOptions.Compiled);
     private static readonly Regex Account = new(@"acct_[A-Za-z0-9]+", RegexOptions.Compiled);
 
@@ -57,6 +57,13 @@ public static class UsageDump
         var obj = new JsonObject();
         if (summaryRaw is not null) obj["usageSummary"] = RedactElement(summaryRaw);
         if (sandRaw is not null) obj["sandUsage"] = RedactElement(sandRaw);
+        return obj.ToJsonString();
+    }
+
+    public static string ClaudePayload(string? usageRaw)
+    {
+        var obj = new JsonObject();
+        if (usageRaw is not null) obj["claudeUsage"] = RedactElement(usageRaw);
         return obj.ToJsonString();
     }
 

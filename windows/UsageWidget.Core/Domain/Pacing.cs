@@ -223,6 +223,22 @@ public static class PacingPlanner
                     section.ManualResets?.CreditList,
                     section.Id.Wire());
             }
+            case SoftwareSectionId.Claude:
+            {
+                var five = section.MeterList.FirstOrDefault(m => m.Id == ClaudeMeterIds.FiveHour);
+                var weekly = section.MeterList.FirstOrDefault(m => m.Id == ClaudeMeterIds.Weekly);
+                var remaining = weekly?.RemainingAmount();
+                if (remaining is null || weekly?.ResetsAtEpochMs is null) return null;
+                return PlanFiveAndWeekly(
+                    remaining.Value,
+                    weekly.ResetsAtEpochMs.Value,
+                    five?.RemainingAmount(),
+                    five?.ResetsAtEpochMs,
+                    nowMs,
+                    percentPerWindow,
+                    null,
+                    section.Id.Wire());
+            }
             case SoftwareSectionId.GrokBot:
             {
                 var meter = section.MeterList.FirstOrDefault(m => m.Id == "cursor.grok_bot") ?? section.MeterList.FirstOrDefault();

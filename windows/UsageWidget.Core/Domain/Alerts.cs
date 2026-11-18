@@ -74,7 +74,7 @@ public sealed record RestoredUsageEvent(
 public static class ResetDetector
 {
     public const double JumpThreshold = 15.0;
-    private static readonly string[] Groups = { "codex.five_hour", "codex.weekly", "grok.weekly", "cursor.plan" };
+    private static readonly string[] Groups = { "codex.five_hour", "codex.weekly", "claude.five_hour", "claude.weekly", "grok.weekly", "cursor.plan" };
 
     public static IReadOnlyList<RestoredUsageEvent> Detect(UsageSnapshot previous, UsageSnapshot current, long nowMs)
     {
@@ -127,6 +127,8 @@ public static class ResetDetector
     {
         "openai.five_hour" => "codex.five_hour",
         "openai.weekly" => "codex.weekly",
+        ClaudeMeterIds.FiveHour => "claude.five_hour",
+        ClaudeMeterIds.Weekly => "claude.weekly",
         "cursor.grok_bot" => "grok.weekly",
         "cursor.models" or "cursor.plan_reset" => "cursor.plan",
         _ => null
@@ -136,6 +138,8 @@ public static class ResetDetector
     {
         "codex.five_hour" => new[] { "openai.five_hour" },
         "codex.weekly" => new[] { "openai.weekly" },
+        "claude.five_hour" => new[] { ClaudeMeterIds.FiveHour },
+        "claude.weekly" => new[] { ClaudeMeterIds.Weekly },
         "grok.weekly" => new[] { "cursor.grok_bot" },
         "cursor.plan" => new[] { "cursor.models", "cursor.plan_reset" },
         _ => Array.Empty<string>()
@@ -145,6 +149,8 @@ public static class ResetDetector
     {
         "codex.five_hour" => "Codex 5-hour usage is back",
         "codex.weekly" => "Codex weekly usage is back",
+        "claude.five_hour" => "Claude session usage is back",
+        "claude.weekly" => "Claude weekly usage is back",
         "grok.weekly" => "Grok Bot weekly usage is back",
         "cursor.plan" => "Cursor usage is back",
         _ => "Usage is back"
@@ -153,13 +159,14 @@ public static class ResetDetector
     private static string ServiceFor(string group) => group switch
     {
         "codex.five_hour" or "codex.weekly" => "Codex",
+        "claude.five_hour" or "claude.weekly" => "Claude",
         "grok.weekly" => "Grok Bot",
         "cursor.plan" => "Cursor",
         _ => "Usage"
     };
 
     private static RestoredKind KindFor(string group) =>
-        group == "codex.five_hour" ? RestoredKind.FiveHour : RestoredKind.Weekly;
+        group is "codex.five_hour" or "claude.five_hour" ? RestoredKind.FiveHour : RestoredKind.Weekly;
 
     private static Dictionary<string, UsageMeter> Flatten(UsageSnapshot snapshot)
     {
@@ -230,6 +237,8 @@ public static class UsageAlertEngine
         {
             "codex.five_hour" => $"Codex 5-hour limit has reset ({remaining}).",
             "codex.weekly" => $"Codex weekly limit has reset ({remaining}).",
+            "claude.five_hour" => $"Claude session limit has reset ({remaining}).",
+            "claude.weekly" => $"Claude weekly limit has reset ({remaining}).",
             "grok.weekly" => $"Grok Bot weekly limit has reset ({remaining}).",
             "cursor.plan" => $"Cursor plan usage has reset ({remaining}).",
             _ => $"{e.ServiceLabel} usage has reset ({remaining})."

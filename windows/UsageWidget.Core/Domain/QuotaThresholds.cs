@@ -36,7 +36,9 @@ public enum QuotaRuleId
     GrokWeekly,
     CursorModels,
     CodexFiveHour,
-    CodexWeekly
+    CodexWeekly,
+    ClaudeFiveHour,
+    ClaudeWeekly
 }
 
 public static class QuotaRuleIds
@@ -47,6 +49,8 @@ public static class QuotaRuleIds
         QuotaRuleId.CursorModels => "cursor.models",
         QuotaRuleId.CodexFiveHour => "codex.five_hour",
         QuotaRuleId.CodexWeekly => "codex.weekly",
+        QuotaRuleId.ClaudeFiveHour => "claude.five_hour",
+        QuotaRuleId.ClaudeWeekly => "claude.weekly",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -56,6 +60,8 @@ public static class QuotaRuleIds
         QuotaRuleId.CursorModels => "cursor.models",
         QuotaRuleId.CodexFiveHour => "openai.five_hour",
         QuotaRuleId.CodexWeekly => "openai.weekly",
+        QuotaRuleId.ClaudeFiveHour => ClaudeMeterIds.FiveHour,
+        QuotaRuleId.ClaudeWeekly => ClaudeMeterIds.Weekly,
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -65,6 +71,8 @@ public static class QuotaRuleIds
         QuotaRuleId.CursorModels => SoftwareSectionId.Cursor,
         QuotaRuleId.CodexFiveHour => SoftwareSectionId.Codex,
         QuotaRuleId.CodexWeekly => SoftwareSectionId.Codex,
+        QuotaRuleId.ClaudeFiveHour => SoftwareSectionId.Claude,
+        QuotaRuleId.ClaudeWeekly => SoftwareSectionId.Claude,
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -74,6 +82,8 @@ public static class QuotaRuleIds
         QuotaRuleId.CursorModels => "Cursor",
         QuotaRuleId.CodexFiveHour => "Codex",
         QuotaRuleId.CodexWeekly => "Codex",
+        QuotaRuleId.ClaudeFiveHour => "Claude",
+        QuotaRuleId.ClaudeWeekly => "Claude",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -83,10 +93,13 @@ public static class QuotaRuleIds
         QuotaRuleId.CursorModels => "models",
         QuotaRuleId.CodexFiveHour => "5-hour",
         QuotaRuleId.CodexWeekly => "weekly",
+        QuotaRuleId.ClaudeFiveHour => "session",
+        QuotaRuleId.ClaudeWeekly => "weekly",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
-    public static bool DefaultEnabled(this QuotaRuleId id) => id is QuotaRuleId.GrokWeekly or QuotaRuleId.CursorModels;
+    public static bool DefaultEnabled(this QuotaRuleId id) =>
+        id is QuotaRuleId.GrokWeekly or QuotaRuleId.CursorModels or QuotaRuleId.ClaudeFiveHour or QuotaRuleId.ClaudeWeekly;
 
     public static int NotificationId(this QuotaRuleId id) => id switch
     {
@@ -94,12 +107,15 @@ public static class QuotaRuleIds
         QuotaRuleId.CursorModels => 6402,
         QuotaRuleId.CodexFiveHour => 6403,
         QuotaRuleId.CodexWeekly => 6404,
+        QuotaRuleId.ClaudeFiveHour => 6405,
+        QuotaRuleId.ClaudeWeekly => 6406,
         _ => 6400
     };
 
     public static IReadOnlyList<QuotaRuleId> All { get; } = new[]
     {
-        QuotaRuleId.GrokWeekly, QuotaRuleId.CursorModels, QuotaRuleId.CodexFiveHour, QuotaRuleId.CodexWeekly
+        QuotaRuleId.GrokWeekly, QuotaRuleId.CursorModels, QuotaRuleId.CodexFiveHour, QuotaRuleId.CodexWeekly,
+        QuotaRuleId.ClaudeFiveHour, QuotaRuleId.ClaudeWeekly
     };
 
     public static IReadOnlySet<string> DefaultEnabledWires { get; } =

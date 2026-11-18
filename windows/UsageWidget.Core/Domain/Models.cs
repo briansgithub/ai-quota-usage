@@ -3,7 +3,8 @@ namespace UsageWidget;
 public enum ProviderId
 {
     Cursor,
-    OpenAi
+    OpenAi,
+    Claude
 }
 
 public static class ProviderIds
@@ -12,6 +13,7 @@ public static class ProviderIds
     {
         ProviderId.Cursor => "cursor",
         ProviderId.OpenAi => "openai",
+        ProviderId.Claude => "claude",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -19,12 +21,14 @@ public static class ProviderIds
     {
         ProviderId.Cursor => "Cursor",
         ProviderId.OpenAi => "ChatGPT / Codex",
+        ProviderId.Claude => "Claude",
         _ => id.ToString()
     };
 
     public static ProviderId FromWire(string value) =>
         value.Equals("cursor", StringComparison.OrdinalIgnoreCase) ? ProviderId.Cursor
         : value.Equals("openai", StringComparison.OrdinalIgnoreCase) ? ProviderId.OpenAi
+        : value.Equals("claude", StringComparison.OrdinalIgnoreCase) ? ProviderId.Claude
         : throw new ArgumentException($"Unknown provider: {value}");
 }
 
@@ -32,7 +36,7 @@ public enum ProviderStatus { Ok, NeedsSignIn, Error, Unsigned, Loading }
 
 public enum MeterBarKind { Pace, Cap }
 
-public enum SoftwareSectionId { Cursor, GrokBot, Codex }
+public enum SoftwareSectionId { Cursor, GrokBot, Codex, Claude }
 
 public static class SoftwareSectionIds
 {
@@ -41,6 +45,7 @@ public static class SoftwareSectionIds
         SoftwareSectionId.Cursor => "Cursor",
         SoftwareSectionId.GrokBot => "Grok Bot",
         SoftwareSectionId.Codex => "Codex",
+        SoftwareSectionId.Claude => "Claude",
         _ => id.ToString()
     };
 
@@ -49,6 +54,7 @@ public static class SoftwareSectionIds
         SoftwareSectionId.Cursor => "cursor",
         SoftwareSectionId.GrokBot => "grok_bot",
         SoftwareSectionId.Codex => "codex",
+        SoftwareSectionId.Claude => "claude",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -56,10 +62,11 @@ public static class SoftwareSectionIds
         value.Equals("cursor", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.Cursor
         : value.Equals("grok_bot", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.GrokBot
         : value.Equals("codex", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.Codex
+        : value.Equals("claude", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.Claude
         : throw new ArgumentException($"Unknown section: {value}");
 
     public static IReadOnlyList<SoftwareSectionId> All { get; } =
-        new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot, SoftwareSectionId.Codex };
+        new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot, SoftwareSectionId.Codex, SoftwareSectionId.Claude };
 }
 
 public sealed record UsageMeter(
@@ -192,7 +199,8 @@ public sealed record UsageSnapshot(
         Providers: new[]
         {
             new ProviderSnapshot(ProviderId.Cursor.Wire(), ProviderId.Cursor.DisplayName(), "UNSIGNED"),
-            new ProviderSnapshot(ProviderId.OpenAi.Wire(), ProviderId.OpenAi.DisplayName(), "UNSIGNED")
+            new ProviderSnapshot(ProviderId.OpenAi.Wire(), ProviderId.OpenAi.DisplayName(), "UNSIGNED"),
+            new ProviderSnapshot(ProviderId.Claude.Wire(), ProviderId.Claude.DisplayName(), "UNSIGNED")
         });
 }
 

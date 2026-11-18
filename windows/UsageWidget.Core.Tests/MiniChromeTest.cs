@@ -10,7 +10,9 @@ public class MiniChromeTest
     {
         Assert.Equal(MiniHit.Client, MiniChrome.Hit(20, 16, 280, 400, captionButtonsLive: false));
         Assert.Equal(MiniHit.Caption, MiniChrome.Hit(80, 16, 280, 400, captionButtonsLive: false));
-        Assert.Equal(MiniHit.Client, MiniChrome.Hit(260, 16, 280, 400, captionButtonsLive: false));
+        // Window buttons sit at the far right only while hovered; otherwise that is drag area.
+        Assert.Equal(MiniHit.Caption, MiniChrome.Hit(260, 16, 280, 400, captionButtonsLive: false));
+        Assert.Equal(MiniHit.Client, MiniChrome.Hit(260, 16, 280, 400, captionButtonsLive: true));
         Assert.Equal(MiniHit.Caption, MiniChrome.Hit(200, 16, 280, 400, captionButtonsLive: false));
         Assert.Equal(MiniHit.Client, MiniChrome.Hit(200, 16, 280, 400, captionButtonsLive: true));
         Assert.Equal(MiniHit.Caption, MiniChrome.Hit(80, 16, 280, 400, captionButtonsLive: true));
@@ -51,7 +53,7 @@ public class MiniChromeTest
     [Fact]
     public void ClampUsesDefaultsWhenSizeMissing()
     {
-        var work = new MiniRect(100, 200, 800, 800);
+        var work = new MiniRect(100, 200, 800, 1000);
         var placed = MiniChrome.Clamp(new MiniRect(120, 220, 0, 0), work);
         Assert.Equal(MiniChrome.DefaultWidth, placed.Width);
         Assert.Equal(MiniChrome.DefaultHeight, placed.Height);

@@ -41,7 +41,9 @@ public class MiniScaleTest
         Assert.Equal(MiniHit.Client, MiniChrome.Hit(20, 20, 280, 400, false, scale: 0.5));
         Assert.Equal(MiniHit.Caption, MiniChrome.Hit(40, 10, 280, 400, false, scale: 0.5));
         Assert.Equal(MiniHit.Client, MiniChrome.Hit(250, 10, 280, 400, true, scale: 0.5));
-        Assert.Equal(MiniHit.Client, MiniChrome.Hit(268, 10, 280, 400, false, scale: 0.5));
+        // No gear in the title strip any more: the top-right is drag area until the window buttons show.
+        Assert.Equal(MiniHit.Caption, MiniChrome.Hit(268, 10, 280, 400, false, scale: 0.5));
+        Assert.Equal(MiniHit.Client, MiniChrome.Hit(268, 10, 280, 400, true, scale: 0.5));
     }
 
     [Fact]
@@ -56,7 +58,7 @@ public class MiniScaleTest
     {
         Assert.Equal(MiniChrome.DefaultHeight, MiniChrome.DesignHeight(0));
         Assert.Equal(MiniChrome.DefaultHeight, MiniChrome.DesignHeight(MiniChrome.DefaultHeight - 40));
-        Assert.Equal(780, MiniChrome.DesignHeight(780));
+        Assert.Equal(MiniChrome.DefaultHeight + 100, MiniChrome.DesignHeight(MiniChrome.DefaultHeight + 100));
     }
 
     [Fact]

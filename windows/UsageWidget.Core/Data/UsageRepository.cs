@@ -16,6 +16,7 @@ public sealed class UsageRepository
     private readonly AuthenticatedHttp _http;
     private readonly CursorUsageClient _cursor;
     private readonly OpenAiUsageClient _openai;
+    private readonly ClaudeUsageClient _claude;
     private readonly IHtmlExtractor _html;
     private readonly object _gate = new();
     private UsageSnapshot _snapshot;
@@ -27,6 +28,7 @@ public sealed class UsageRepository
         _http = http ?? new AuthenticatedHttp(cookies);
         _cursor = new CursorUsageClient(_http, cookies);
         _openai = new OpenAiUsageClient(_http, cookies);
+        _claude = new ClaudeUsageClient(_http, cookies);
         _html = html ?? new NullHtmlExtractor();
         _snapshot = LoadCached() ?? UsageSnapshot.Empty(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
@@ -56,7 +58,13 @@ public sealed class UsageRepository
             now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var cursorResult = FetchProvider(ProviderId.Cursor, allowHtmlFallback, now);
             var openaiResult = FetchProvider(ProviderId.OpenAi, allowHtmlFallback, now);
-            var combined = SnapshotMerger.Merge(previous, cursorResult, openaiResult, now, _cookies.HasSession(ProviderId.Cursor), _cookies.HasSession(ProviderId.OpenAi));
+            var claudeResult = FetchProvider(ProviderId.Claude, allowHtmlFallback, now);
+            var combined = SnapshotMerger.Merge(previous, new[]
+            {
+                new SnapshotMerger.ProviderRound(ProviderId.Cursor, cursorResult, _cookies.HasSession(ProviderId.Cursor)),
+                new SnapshotMerger.ProviderRound(ProviderId.OpenAi, openaiResult, _cookies.HasSession(ProviderId.OpenAi)),
+                new SnapshotMerger.ProviderRound(ProviderId.Claude, claudeResult, _cookies.HasSession(ProviderId.Claude))
+            }, now);
             Persist(combined);
             lock (_gate) _snapshot = combined;
             SnapshotChanged?.Invoke(combined);
@@ -91,13 +99,27 @@ public sealed class UsageRepository
 
     private ProviderResult FetchProvider(ProviderId provider, bool allowHtmlFallback, long now)
     {
-        var result = provider == ProviderId.Cursor ? _cursor.Fetch(now) : _openai.Fetch(now);
+        var result = provider switch
+        {
+            ProviderId.Cursor => _cursor.Fetch(now),
+            ProviderId.Claude => _claude.Fetch(now),
+            _ => _openai.Fetch(now)
+        };
         if (result is ProviderResult.Success or ProviderResult.NeedsSignIn) return result;
         if (result is ProviderResult.Failure failure && allowHtmlFallback && _cookies.HasSession(provider))
         {
             try
             {
                 var text = _html.ExtractPageTextAsync(provider).GetAwaiter().GetResult();
+                if (provider == ProviderId.Claude)
+                {
+                    if (ClaudeUsageClient.IsAuthErrorBody(text))
+                        return new ProviderResult.NeedsSignIn("Claude session expired. Sign in again.",
+                            failure.AttemptList.Append(FetchAttempt.Of(now, SoftwareSectionId.Claude, FetchOutcome.AuthExpired,
+                                message: "claude.ai rejected the session", endpoint: ClaudeEndpoints.UsagePage, source: "webview")).ToList());
+                    var claudeSnap = _claude.SnapshotFromWebJson(text, now);
+                    return new ProviderResult.Success(claudeSnap, failure.AttemptList.Append(_claude.WebAttempt(now)).ToList());
+                }
                 if (provider == ProviderId.Cursor)
                 {
                     var snapshot = _cursor.SnapshotFromHtml(text, now);
@@ -116,7 +138,9 @@ public sealed class UsageRepository
     }
 
     private static IReadOnlyList<FetchAttempt> HtmlFallbackAttempts(ProviderId provider, Exception error, long now) =>
-        provider == ProviderId.Cursor
+        provider == ProviderId.Claude
+            ? new[] { FetchErrorClassifier.Attempt(error, SoftwareSectionId.Claude, ClaudeEndpoints.UsagePage, now, "webview") }
+        : provider == ProviderId.Cursor
             ? new[]
             {
                 FetchErrorClassifier.Attempt(error, SoftwareSectionId.Cursor, CursorEndpoints.SpendingPage, now, "html"),

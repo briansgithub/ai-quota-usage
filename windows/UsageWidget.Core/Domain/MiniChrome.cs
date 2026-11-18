@@ -30,15 +30,18 @@ public static class MiniChrome
     public const double PinWidth = 32;
     public const double GearWidth = 32;
     public const double LeftChromeWidth = PinWidth + GearWidth;
+    /// <summary>Refresh / Settings buttons in the footer, next to the countdown.</summary>
+    public const double FooterButtonWidth = 28;
+    public const double FooterHeight = 24;
     public const double MinWidth = 240;
     public const double MinHeight = 200;
     public const double DefaultWidth = 280;
     /// <summary>
-    /// Default mini-panel height. Must cover caption + three compact cards (Cursor, Grok Bot,
-    /// Codex, including on-demand bars) + footer; 460 clipped the Codex card. Scale still uses
+    /// Default mini-panel height. Must cover caption + four compact cards (Cursor, Grok Bot,
+    /// Codex, Claude, including on-demand bars) + footer; 460 clipped the Codex card. Scale still uses
     /// <see cref="DesignHeight"/> from the measured content so a shorter saved window does not crop either.
     /// </summary>
-    public const double DefaultHeight = 680;
+    public const double DefaultHeight = 840;
     public const double ContentSlack = 4;
 
     public static double ContentHeight(double bodyAndFooterHeight) =>
@@ -86,15 +89,10 @@ public static class MiniChrome
         var capH = CaptionHeight * scale;
         if (y >= 0 && y < capH)
         {
-            // Gear sits in the upper-right. The outer grip stays a resize edge (handled above).
-            var gearLeft = width - GearWidth * scale;
-            if (x >= gearLeft && x < width) return MiniHit.Client;
-            if (captionButtonsLive)
-            {
-                var buttonsRight = gearLeft;
-                var buttonsLeft = Math.Max(0, buttonsRight - CaptionButtonsWidth * scale);
-                if (x >= buttonsLeft && x < buttonsRight) return MiniHit.Client;
-            }
+            // The title strip holds window chrome only: pin on the left, and minimize /
+            // maximize / exit at the far right while hovered. Refresh and Settings live in the
+            // footer. The outer grip stays a resize edge (handled above).
+            if (captionButtonsLive && x >= Math.Max(0, width - CaptionButtonsWidth * scale)) return MiniHit.Client;
             if (x >= grip && x < PinWidth * scale) return MiniHit.Client;
             return MiniHit.Caption;
         }
