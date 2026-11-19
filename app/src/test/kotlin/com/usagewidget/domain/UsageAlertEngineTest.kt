@@ -32,6 +32,7 @@ class UsageAlertEngineTest {
         val first = UsageAlertEngine.evaluate(previous, current, now, prefs, emptySet())
         assertEquals(1, first.alerts.count { it.channel == AlertChannel.RESTORED })
         assertTrue(first.alerts.first { it.channel == AlertChannel.RESTORED }.title.contains("5-hour"))
+        assertTrue(first.alerts.first { it.channel == AlertChannel.RESTORED }.body.contains("(0% used)"))
         val second = UsageAlertEngine.evaluate(previous, current, now, prefs, first.newSeenKeys)
         assertTrue(second.alerts.none { it.channel == AlertChannel.RESTORED })
     }
