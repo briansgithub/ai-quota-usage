@@ -43,7 +43,7 @@ class QuotaThresholdEngineTest {
         val dropped = liveSnapshot(grokRemaining = 38.0)
         val notified = QuotaThresholdEngine.evaluate(dropped, now, prefs, seeded.states, quiet = false)
         assertEquals(1, notified.alerts.size)
-        assertTrue(notified.alerts.single().body.contains("40% weekly quota left"))
+        assertTrue(notified.alerts.single().body.contains("60% weekly quota used"))
         val again = QuotaThresholdEngine.evaluate(
             liveSnapshot(grokRemaining = 35.0),
             now,
@@ -71,7 +71,7 @@ class QuotaThresholdEngineTest {
             quiet = false
         )
         assertEquals(1, plan.alerts.size)
-        assertTrue(plan.alerts.single().body.contains("20% weekly quota left"))
+        assertTrue(plan.alerts.single().body.contains("80% weekly quota used"))
         assertTrue(plan.states.getValue(QuotaRuleId.GROK_WEEKLY.wire).fired.containsAll(listOf(50, 40, 30, 25, 20)))
     }
 
@@ -102,7 +102,7 @@ class QuotaThresholdEngineTest {
             quiet = false
         )
         assertEquals(1, drop.alerts.size)
-        assertTrue(drop.alerts.single().body.contains("90% weekly quota left"))
+        assertTrue(drop.alerts.single().body.contains("10% weekly quota used"))
     }
 
     @Test
@@ -279,7 +279,7 @@ class QuotaThresholdEngineTest {
             quiet = false
         )
         assertEquals(1, after.alerts.size)
-        assertTrue(after.alerts.single().body.contains("20% weekly quota left"))
+        assertTrue(after.alerts.single().body.contains("80% weekly quota used"))
     }
 
     @Test
@@ -288,7 +288,7 @@ class QuotaThresholdEngineTest {
             .toInstant()
             .toEpochMilli()
         val body = QuotaThresholdEngine.bodyFor(QuotaRuleId.GROK_WEEKLY, 20, mondayThree)
-        assertEquals("Grok Bot: 20% weekly quota left (resets Mon 3:00 PM ET)", body)
+        assertEquals("Grok Bot: 80% weekly quota used (resets Mon 3:00 PM ET)", body)
         assertEquals(body, QuotaThresholdEngine.TEST_BODY)
     }
 
@@ -310,7 +310,7 @@ class QuotaThresholdEngineTest {
             quiet = false
         )
         assertEquals(1, plan.alerts.size)
-        assertTrue(plan.alerts.single().body.contains("10% weekly quota left"))
+        assertTrue(plan.alerts.single().body.contains("90% weekly quota used"))
     }
 
     private fun liveSnapshot(

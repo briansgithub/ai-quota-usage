@@ -232,7 +232,7 @@ public static class UsageAlertEngine
 
     private static AlertToPost RestoredAlert(RestoredUsageEvent e)
     {
-        var remaining = e.NewRemaining is { } r ? $"{(int)Math.Round(r, MidpointRounding.AwayFromZero)}% left" : "ready to use";
+        var remaining = e.NewRemaining is { } r ? $"{100 - (int)Math.Round(r, MidpointRounding.AwayFromZero)}% used" : "ready to use";
         var body = e.Group switch
         {
             "codex.five_hour" => $"Codex 5-hour limit has reset ({remaining}).",
@@ -303,7 +303,7 @@ public static class UsageAlertEngine
         if (prefs.NotifyPacingReminders && result.Kind == PaceKind.WeeklyOnly && result.ShouldWarnUnused)
         {
             yield return Alert(AlertChannel.Pacing, $"{name} usage is ahead of the clock",
-                $"{(int)Math.Round(result.WasteGap, MidpointRounding.AwayFromZero)}% more remaining than even pace — on track to leave usage unused.",
+                $"{(int)Math.Round(result.WasteGap, MidpointRounding.AwayFromZero)}% less used than even pace — on track to leave usage unused.",
                 $"pace-weekly:{result.SectionId}:{result.WeeklyResetEpochMs}");
         }
 

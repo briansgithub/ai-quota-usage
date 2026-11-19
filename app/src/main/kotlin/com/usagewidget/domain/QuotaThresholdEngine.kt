@@ -122,8 +122,8 @@ data class QuotaThresholdPlan(
  * Quiet hours still seed; unposted crossings stay unfired so they can notify later.
  */
 object QuotaThresholdEngine {
-    const val TEST_TITLE = "Quota remaining"
-    const val TEST_BODY = "Grok Bot: 20% weekly quota left (resets Mon 3:00 PM ET)"
+    const val TEST_TITLE = "Quota used"
+    const val TEST_BODY = "Grok Bot: 80% weekly quota used (resets Mon 3:00 PM ET)"
     const val CHANNEL_ID = "quota_thresholds"
 
     fun testAlert(): AlertToPost = AlertToPost(
@@ -138,9 +138,9 @@ object QuotaThresholdEngine {
     /** One sample per service, so "Send test notification" previews every logo. */
     fun testAlerts(): List<AlertToPost> = listOf(
         testAlert(),
-        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Cursor: 20% models quota left (test)", "quota:test:cursor", 6496, SoftwareSectionId.CURSOR),
-        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Codex: 20% weekly quota left (test)", "quota:test:codex", 6497, SoftwareSectionId.CODEX),
-        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Claude: 20% session quota left (test)", "quota:test:claude", 6498, SoftwareSectionId.CLAUDE)
+        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Cursor: 80% models quota used (test)", "quota:test:cursor", 6496, SoftwareSectionId.CURSOR),
+        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Codex: 80% weekly quota used (test)", "quota:test:codex", 6497, SoftwareSectionId.CODEX),
+        AlertToPost(AlertChannel.QUOTA, TEST_TITLE, "Claude: 80% session quota used (test)", "quota:test:claude", 6498, SoftwareSectionId.CLAUDE)
     )
 
     fun evaluate(
@@ -207,7 +207,7 @@ object QuotaThresholdEngine {
     }
 
     fun bodyFor(rule: QuotaRuleId, threshold: Int, resetsAtEpochMs: Long?): String {
-        val core = "${rule.serviceLabel}: ${threshold}% ${rule.windowLabel} quota left"
+        val core = "${rule.serviceLabel}: ${100 - threshold}% ${rule.windowLabel} quota used"
         val reset = resetsAtEpochMs?.let { NyTime.formatQuotaReset(it) } ?: return core
         return "$core (resets $reset)"
     }

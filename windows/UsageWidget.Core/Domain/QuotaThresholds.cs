@@ -153,8 +153,8 @@ public sealed record QuotaThresholdPlan(
 /// </summary>
 public static class QuotaThresholdEngine
 {
-    public const string TestTitle = "Quota remaining";
-    public const string TestBody = "Grok Bot: 20% weekly quota left (resets Mon 3:00 PM ET)";
+    public const string TestTitle = "Quota used";
+    public const string TestBody = "Grok Bot: 80% weekly quota used (resets Mon 3:00 PM ET)";
 
     public static AlertToPost TestAlert() => new(
         AlertChannel.Quota,
@@ -234,7 +234,7 @@ public static class QuotaThresholdEngine
 
     public static string BodyFor(QuotaRuleId rule, int threshold, long? resetsAtEpochMs)
     {
-        var core = $"{rule.ServiceLabel()}: {threshold}% {rule.WindowLabel()} quota left";
+        var core = $"{rule.ServiceLabel()}: {100 - threshold}% {rule.WindowLabel()} quota used";
         if (resetsAtEpochMs is null) return core;
         return $"{core} (resets {NyTime.FormatQuotaReset(resetsAtEpochMs.Value)})";
     }
