@@ -59,6 +59,7 @@ import com.usagewidget.domain.PaceWindows
 import com.usagewidget.domain.PacingPlanner
 import com.usagewidget.domain.PacingPolicy
 import com.usagewidget.domain.ProviderStatus
+import com.usagewidget.domain.RefreshSchedule
 import com.usagewidget.domain.ResetEmphasis
 import com.usagewidget.domain.ResetUrgency
 import com.usagewidget.domain.SoftwareSection
@@ -67,7 +68,9 @@ import com.usagewidget.domain.StaleView
 import com.usagewidget.domain.UsageMeter
 import com.usagewidget.domain.UsageSections
 import com.usagewidget.domain.UsageSnapshot
+import com.usagewidget.refresh.UsageRefreshWorker
 import com.usagewidget.util.NyTime
+import com.usagewidget.util.ResetSegment
 
 class UsageGlanceWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
@@ -193,10 +196,11 @@ private fun WidgetContent(
                 Spacer(GlanceModifier.height(if (compact) 4.dp else 6.dp))
             }
         }
-        if (nextRefreshAt > 0L) {
+        val lastSuccess = RefreshSchedule.lastSuccessEpochMs(snapshot)
+        if (nextRefreshAt > 0L || lastSuccess > 0L) {
             Spacer(GlanceModifier.height(4.dp))
             AndroidRemoteViews(
-                remoteViews = NextRefreshCountdown.remoteViews(context, nextRefreshAt, now),
+                remoteViews = NextRefreshCountdown.remoteViews(context, nextRefreshAt, lastSuccess, now),
                 modifier = GlanceModifier
                     .wrapContentWidth()
                     .wrapContentHeight()
@@ -379,8 +383,10 @@ private fun MeterGlanceRow(
     tileWidth: Dp
 ) {
     val used = meter.usedLabel()
-    val reset = meter.resetsAtEpochMs?.let { NyTime.formatResetLine(it, nowMs) }
-        ?: meter.resetLabel.orEmpty()
+    val resetSegments = meter.resetsAtEpochMs?.let { NyTime.formatResetSegments(it, nowMs) }
+        ?: meter.resetLabel?.takeIf { it.isNotBlank() }?.let { listOf(ResetSegment(it, emphasized = false)) }
+        ?: emptyList()
+    val resetStyle = resetTextStyle(meter.resetsAtEpochMs, nowMs)
     Column(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -397,17 +403,33 @@ private fun MeterGlanceRow(
                     text = used,
                     style = TextStyle(color = TextOn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 )
-            } else if (reset.isNotBlank() && !meter.hasUsageBar) {
-                Text(text = reset, style = resetTextStyle(meter.resetsAtEpochMs, nowMs))
+            } else if (resetSegments.isNotEmpty() && !meter.hasUsageBar) {
+                ResetLine(resetSegments, resetStyle)
             }
         }
         if (meter.hasUsageBar && !compact) {
             Spacer(GlanceModifier.height(4.dp))
             GlancePaceBar(meter, nowMs, tileWidth)
         }
-        if (used != null && reset.isNotBlank()) {
+        if (used != null && resetSegments.isNotEmpty()) {
             Spacer(GlanceModifier.height(2.dp))
-            Text(text = reset, style = resetTextStyle(meter.resetsAtEpochMs, nowMs))
+            ResetLine(resetSegments, resetStyle)
+        }
+    }
+}
+
+/** Reset line: only the emphasized runs (clock time, duration) are bold. */
+@Composable
+private fun ResetLine(segments: List<ResetSegment>, style: TextStyle) {
+    Row {
+        for (segment in segments) {
+            Text(
+                text = segment.text,
+                maxLines = 1,
+                style = style.copy(
+                    fontWeight = if (segment.emphasized) FontWeight.Bold else FontWeight.Normal
+                )
+            )
         }
     }
 }
@@ -420,16 +442,11 @@ private fun resetTextStyle(resetAtEpochMs: Long?, nowMs: Long): TextStyle {
         ResetUrgency.NEAR -> Amber
         ResetUrgency.IMMINENT -> Imminent
     }
-    val weight = when (urgency) {
-        ResetUrgency.RELAXED -> FontWeight.Medium
-        ResetUrgency.SOON -> FontWeight.Medium
-        ResetUrgency.NEAR, ResetUrgency.IMMINENT -> FontWeight.Bold
-    }
     val size = when (urgency) {
         ResetUrgency.RELAXED -> 12.sp
         else -> 13.sp
     }
-    return TextStyle(color = color, fontSize = size, fontWeight = weight)
+    return TextStyle(color = color, fontSize = size)
 }
 
 @Composable
@@ -459,6 +476,7 @@ class RefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: androidx.glance.action.ActionParameters
     ) {
-        UsageRepository.get(context).refresh(allowHtmlFallback = false)
+        // Not refresh() here: a slow fetch inside this broadcast got the app ANR-killed.
+        UsageRefreshWorker.enqueueExpedited(context)
     }
 }
