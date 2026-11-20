@@ -1,3 +1,4 @@
+using System.Linq;
 using UsageWidget;
 using Xunit;
 
@@ -52,6 +53,16 @@ public class NyTimeTest
     {
         var inFourHours = Now + 4 * 3_600_000 + 50 * 60_000;
         Assert.Contains("4h", NyTime.Countdown(inFourHours, Now));
+    }
+
+    [Fact]
+    public void ResetSegmentsEmphasizeOnlyClockAndDuration()
+    {
+        var thuAfternoon = DateTimeOffset.Parse("2026-11-05T20:20:26Z").ToUnixTimeMilliseconds();
+        var segments = NyTime.FormatResetSegments(thuAfternoon, Now);
+        Assert.Equal(
+            new[] { ("Reset: Thu ", false), ("3:20 PM", true), (" (", false), ("4h", true), (")", false) },
+            segments.Select(s => (s.Text, s.Emphasized)).ToArray());
     }
 
     [Fact]

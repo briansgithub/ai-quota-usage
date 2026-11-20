@@ -61,6 +61,7 @@ import com.usagewidget.domain.PacingPolicy
 import com.usagewidget.domain.ProviderStatus
 import com.usagewidget.domain.RefreshSchedule
 import com.usagewidget.domain.ResetEmphasis
+import com.usagewidget.domain.ResetSegmentLook
 import com.usagewidget.domain.ResetUrgency
 import com.usagewidget.domain.SoftwareSection
 import com.usagewidget.domain.StaleSeverity
@@ -386,7 +387,6 @@ private fun MeterGlanceRow(
     val resetSegments = meter.resetsAtEpochMs?.let { NyTime.formatResetSegments(it, nowMs) }
         ?: meter.resetLabel?.takeIf { it.isNotBlank() }?.let { listOf(ResetSegment(it, emphasized = false)) }
         ?: emptyList()
-    val resetStyle = resetTextStyle(meter.resetsAtEpochMs, nowMs)
     Column(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -404,7 +404,7 @@ private fun MeterGlanceRow(
                     style = TextStyle(color = TextOn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 )
             } else if (resetSegments.isNotEmpty() && !meter.hasUsageBar) {
-                ResetLine(resetSegments, resetStyle)
+                ResetLine(resetSegments, meter.resetsAtEpochMs, nowMs)
             }
         }
         if (meter.hasUsageBar && !compact) {
@@ -413,40 +413,37 @@ private fun MeterGlanceRow(
         }
         if (used != null && resetSegments.isNotEmpty()) {
             Spacer(GlanceModifier.height(2.dp))
-            ResetLine(resetSegments, resetStyle)
+            ResetLine(resetSegments, meter.resetsAtEpochMs, nowMs)
         }
     }
 }
 
-/** Reset line: only the emphasized runs (clock time, duration) are bold. */
+/**
+ * Reset line: only the emphasized runs (clock time, duration) get the urgency
+ * colour, larger size and bold; "Reset:", the day and parentheses stay plain.
+ */
 @Composable
-private fun ResetLine(segments: List<ResetSegment>, style: TextStyle) {
-    Row {
+private fun ResetLine(segments: List<ResetSegment>, resetAtEpochMs: Long?, nowMs: Long) {
+    val urgency = ResetEmphasis.of(resetAtEpochMs, nowMs)
+    Row(verticalAlignment = Alignment.Bottom) {
         for (segment in segments) {
+            val look = ResetSegmentLook.of(segment.emphasized, urgency)
             Text(
                 text = segment.text,
                 maxLines = 1,
-                style = style.copy(
-                    fontWeight = if (segment.emphasized) FontWeight.Bold else FontWeight.Normal
+                style = TextStyle(
+                    color = when (look.urgency) {
+                        ResetUrgency.RELAXED -> TextOn
+                        ResetUrgency.SOON -> Bright
+                        ResetUrgency.NEAR -> Amber
+                        ResetUrgency.IMMINENT -> Imminent
+                    },
+                    fontSize = if (look.enlarged) 13.sp else 12.sp,
+                    fontWeight = if (look.bold) FontWeight.Bold else FontWeight.Normal
                 )
             )
         }
     }
-}
-
-private fun resetTextStyle(resetAtEpochMs: Long?, nowMs: Long): TextStyle {
-    val urgency = ResetEmphasis.of(resetAtEpochMs, nowMs)
-    val color = when (urgency) {
-        ResetUrgency.RELAXED -> TextOn
-        ResetUrgency.SOON -> Bright
-        ResetUrgency.NEAR -> Amber
-        ResetUrgency.IMMINENT -> Imminent
-    }
-    val size = when (urgency) {
-        ResetUrgency.RELAXED -> 12.sp
-        else -> 13.sp
-    }
-    return TextStyle(color = color, fontSize = size)
 }
 
 @Composable

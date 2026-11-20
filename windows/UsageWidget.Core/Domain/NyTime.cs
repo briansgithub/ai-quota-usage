@@ -1,7 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace UsageWidget;
+
+public readonly record struct ResetSegment(string Text, bool Emphasized);
 
 public static class NyTime
 {
@@ -20,12 +24,25 @@ public static class NyTime
     public static DateTimeOffset AtZone(long epochMs) =>
         TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(epochMs), Zone);
 
-    public static string FormatResetLine(long epochMs, long nowMs)
+    public static string FormatResetLine(long epochMs, long nowMs) =>
+        string.Concat(FormatResetSegments(epochMs, nowMs).Select(s => s.Text));
+
+    /// <summary>
+    /// The reset line split so the UI can emphasize only the clock time and the
+    /// duration: <c>Reset: Fri </c> + <b>9 AM</b> + <c> (</c> + <b>1d 4h</b> + <c>)</c>.
+    /// </summary>
+    public static IReadOnlyList<ResetSegment> FormatResetSegments(long epochMs, long nowMs)
     {
         var zoned = AtZone(epochMs);
         var day = zoned.ToString("ddd", CultureInfo.InvariantCulture);
-        var clock = FormatResetClock(zoned);
-        return $"Reset: {day} {clock} ({FormatResetRelative(epochMs, nowMs)})";
+        return new[]
+        {
+            new ResetSegment($"Reset: {day} ", false),
+            new ResetSegment(FormatResetClock(zoned), true),
+            new ResetSegment(" (", false),
+            new ResetSegment(FormatResetRelative(epochMs, nowMs), true),
+            new ResetSegment(")", false)
+        };
     }
 
     public static string FormatResetClock(DateTimeOffset zoned)

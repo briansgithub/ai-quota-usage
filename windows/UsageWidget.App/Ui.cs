@@ -153,12 +153,33 @@ internal static class Ui
         return track;
     }
 
+    /// <summary>Only the emphasized runs (clock time, duration) get the urgency brush, size and weight.</summary>
+    private static TextBlock ResetLine(IEnumerable<ResetSegment> segments, ResetUrgency urgency, bool compact)
+    {
+        var tb = new TextBlock { TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Segoe UI") };
+        var plainSize = compact ? 11 : 13;
+        foreach (var segment in segments)
+        {
+            tb.Inlines.Add(segment.Emphasized
+                ? new Run(segment.Text)
+                {
+                    Foreground = Theme.ResetBrush(urgency),
+                    FontSize = Theme.ResetSize(urgency, compact),
+                    FontWeight = FontWeights.Bold
+                }
+                : new Run(segment.Text) { Foreground = Theme.TextBrush, FontSize = plainSize, FontWeight = FontWeights.Normal });
+        }
+        return tb;
+    }
+
     public static FrameworkElement MeterBlock(UsageMeter meter, long nowMs, bool compact, bool stale)
     {
         var col = new StackPanel { Margin = new Thickness(0, 0, 0, compact ? 4 : 8) };
         var row = new DockPanel { LastChildFill = true };
         var used = meter.UsedLabel();
-        var reset = meter.ResetsAtEpochMs is { } r ? NyTime.FormatResetLine(r, nowMs) : meter.ResetLabel;
+        var resetSegments = meter.ResetsAtEpochMs is { } r
+            ? NyTime.FormatResetSegments(r, nowMs)
+            : string.IsNullOrWhiteSpace(meter.ResetLabel) ? null : new[] { new ResetSegment(meter.ResetLabel!, false) };
         row.Children.Add(T(meter.Title, stale ? Theme.MutedBrush : Theme.TextBrush, compact ? 12 : 14));
         if (used is not null)
         {
@@ -172,11 +193,8 @@ internal static class Ui
                 meter.DisplayUsedPercent ?? 0,
                 expectedUsedPercent: meter.IsCapBar ? null : PaceWindows.ExpectedUsedPercent(meter, nowMs),
                 capBar: meter.IsCapBar));
-        if (!string.IsNullOrWhiteSpace(reset) && (used is not null || !meter.HasUsageBar))
-        {
-            var urgency = ResetEmphasis.Of(meter.ResetsAtEpochMs, nowMs);
-            col.Children.Add(T(reset!, Theme.ResetBrush(urgency), Theme.ResetSize(urgency, compact), Theme.ResetWeight(urgency)));
-        }
+        if (resetSegments is not null && (used is not null || !meter.HasUsageBar))
+            col.Children.Add(ResetLine(resetSegments, ResetEmphasis.Of(meter.ResetsAtEpochMs, nowMs), compact));
         return col;
     }
 

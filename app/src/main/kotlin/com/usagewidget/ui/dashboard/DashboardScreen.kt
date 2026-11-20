@@ -53,7 +53,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,6 +76,7 @@ import com.usagewidget.domain.UsedGradient
 import com.usagewidget.domain.ProviderStatus
 import com.usagewidget.domain.RefreshSchedule
 import com.usagewidget.domain.ResetEmphasis
+import com.usagewidget.domain.ResetSegmentLook
 import com.usagewidget.domain.ResetUrgency
 import com.usagewidget.domain.SoftwareSection
 import com.usagewidget.domain.SoftwareSectionId
@@ -95,6 +99,7 @@ import com.usagewidget.ui.theme.StaleAmberBg
 import com.usagewidget.ui.theme.StaleRed
 import com.usagewidget.ui.theme.StaleRedBg
 import com.usagewidget.util.NyTime
+import com.usagewidget.util.ResetSegment
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -414,8 +419,8 @@ private fun SectionCard(
 @Composable
 fun MeterRow(meter: UsageMeter, nowMs: Long = System.currentTimeMillis(), stale: Boolean = false) {
     val used = meter.usedLabel()
-    val reset = meter.resetsAtEpochMs?.let { NyTime.formatResetLine(it, nowMs) }
-        ?: meter.resetLabel
+    val reset = meter.resetsAtEpochMs?.let { NyTime.formatResetSegments(it, nowMs) }
+        ?: meter.resetLabel?.let { listOf(ResetSegment(it, emphasized = false)) }
     val titleColor = if (stale) CursorMuted else CursorText
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -427,14 +432,14 @@ fun MeterRow(meter: UsageMeter, nowMs: Long = System.currentTimeMillis(), stale:
             )
             if (used != null) {
                 Text(used, color = CursorText, style = MaterialTheme.typography.bodyMedium)
-            } else if (!reset.isNullOrBlank() && !meter.hasUsageBar) {
+            } else if (!reset.isNullOrEmpty() && !meter.hasUsageBar) {
                 ResetText(reset, meter.resetsAtEpochMs, nowMs)
             }
         }
         if (meter.hasUsageBar) {
             UsageBar(meter = meter, nowMs = nowMs)
         }
-        if (used != null && !reset.isNullOrBlank()) {
+        if (used != null && !reset.isNullOrEmpty()) {
             ResetText(reset, meter.resetsAtEpochMs, nowMs)
         }
     }
@@ -474,16 +479,24 @@ fun UsageBar(meter: UsageMeter, nowMs: Long) {
     }
 }
 
+/** Only the clock time and duration take the urgency colour, size and bold. */
 @Composable
-private fun ResetText(reset: String, resetAtEpochMs: Long?, nowMs: Long) {
+private fun ResetText(segments: List<ResetSegment>, resetAtEpochMs: Long?, nowMs: Long) {
     val urgency = ResetEmphasis.of(resetAtEpochMs, nowMs)
     Text(
-        reset,
-        color = resetColor(urgency),
-        style = MaterialTheme.typography.bodyMedium.copy(
-            fontWeight = resetWeight(urgency),
-            fontSize = resetSize(urgency)
-        )
+        buildAnnotatedString {
+            for (segment in segments) {
+                val look = ResetSegmentLook.of(segment.emphasized, urgency)
+                withStyle(
+                    SpanStyle(
+                        color = resetColor(look.urgency),
+                        fontWeight = if (look.bold) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = if (look.enlarged) 14.sp else 13.sp
+                    )
+                ) { append(segment.text) }
+            }
+        },
+        style = MaterialTheme.typography.bodyMedium
     )
 }
 
@@ -492,17 +505,6 @@ private fun resetColor(urgency: ResetUrgency): Color = when (urgency) {
     ResetUrgency.SOON -> ResetBright
     ResetUrgency.NEAR -> ResetAmber
     ResetUrgency.IMMINENT -> ResetImminent
-}
-
-private fun resetWeight(urgency: ResetUrgency): FontWeight = when (urgency) {
-    ResetUrgency.RELAXED -> FontWeight.Medium
-    ResetUrgency.SOON -> FontWeight.SemiBold
-    ResetUrgency.NEAR, ResetUrgency.IMMINENT -> FontWeight.Bold
-}
-
-private fun resetSize(urgency: ResetUrgency): TextUnit = when (urgency) {
-    ResetUrgency.RELAXED -> 13.sp
-    ResetUrgency.SOON, ResetUrgency.NEAR, ResetUrgency.IMMINENT -> 14.sp
 }
 
 private fun paceColor(urgency: PaceUrgency): Color = when (urgency) {
