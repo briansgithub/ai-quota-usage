@@ -15,6 +15,9 @@ import java.time.format.DateTimeParseException
 import java.util.Locale
 import kotlin.math.abs
 
+/** A run of reset-line text; [emphasized] runs (time, duration) are drawn bold. */
+data class ResetSegment(val text: String, val emphasized: Boolean)
+
 object NyTime {
     val zone: ZoneId = ZoneId.of(NyZone.ID)
     private const val GROK_WEEK_MS = 7L * 24 * 60 * 60 * 1000
@@ -51,11 +54,23 @@ object NyTime {
         }
     }
 
-    fun formatResetLine(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    fun formatResetLine(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String =
+        formatResetSegments(epochMs, nowMs).joinToString("") { it.text }
+
+    /**
+     * The reset line split so a UI can bold only the clock time and the time-left
+     * duration: `Reset: Fri ` + **`9 AM`** + ` (` + **`1d 4h`** + `)`.
+     */
+    fun formatResetSegments(epochMs: Long, nowMs: Long = System.currentTimeMillis()): List<ResetSegment> {
         val zoned = Instant.ofEpochMilli(epochMs).atZone(zone)
         val day = zoned.format(weekday)
-        val clock = formatResetClock(zoned)
-        return "Reset: $day $clock (${formatResetRelative(epochMs, nowMs)})"
+        return listOf(
+            ResetSegment("Reset: $day ", emphasized = false),
+            ResetSegment(formatResetClock(zoned), emphasized = true),
+            ResetSegment(" (", emphasized = false),
+            ResetSegment(formatResetRelative(epochMs, nowMs), emphasized = true),
+            ResetSegment(")", emphasized = false)
+        )
     }
 
     fun formatResetClock(zoned: ZonedDateTime): String {

@@ -64,6 +64,20 @@ class NyTimeTest {
     }
 
     @Test
+    fun resetSegmentsEmphasizeOnlyClockAndDuration() {
+        val wedThreePm = Instant.parse("2026-11-11T20:00:00Z").toEpochMilli()
+        val segments = NyTime.formatResetSegments(wedThreePm, now)
+        assertEquals(
+            listOf("Reset: Wed " to false, "3 PM" to true, " (" to false, "6d 4h" to true, ")" to false),
+            segments.map { it.text to it.emphasized }
+        )
+        assertEquals(NyTime.formatResetLine(wedThreePm, now), segments.joinToString("") { it.text })
+        val overdue = NyTime.formatResetSegments(now - 60_000L, now)
+        assertEquals("due", overdue[3].text)
+        assertTrue(overdue[3].emphasized)
+    }
+
+    @Test
     fun overlayUtcMidnightDateWithNyClockFromPeriodStart() {
         val next = Instant.parse("2026-11-06T00:00:00.000Z").toEpochMilli()
         val start = Instant.parse("2026-10-30T13:00:00.000Z").toEpochMilli()
