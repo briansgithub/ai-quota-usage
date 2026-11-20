@@ -5,9 +5,12 @@ package com.usagewidget.domain
  *
  * Thresholds (time until reset):
  * - **RELAXED** — more than 48 hours: normal white
- * - **SOON** — 24–48 hours: brighter white, bolder
- * - **NEAR** — 5–24 hours: amber, bold
- * - **IMMINENT** — 5 hours or less (including overdue): orange/red, bold
+ * - **SOON** — 24–48 hours: brighter white
+ * - **NEAR** — 5–24 hours: amber
+ * - **IMMINENT** — 5 hours or less (including overdue): orange/red
+ *
+ * The urgency styling (colour, size, bold) applies only to the clock time and the
+ * duration; "Reset:", the day and the parentheses always render plain ([ResetSegmentLook]).
  */
 enum class ResetUrgency {
     RELAXED,
@@ -30,5 +33,16 @@ object ResetEmphasis {
             left <= RELAXED_AFTER_MS -> ResetUrgency.SOON
             else -> ResetUrgency.RELAXED
         }
+    }
+}
+
+/** How one run of the reset line is drawn. Plain runs ignore urgency entirely. */
+data class ResetSegmentLook(val urgency: ResetUrgency, val bold: Boolean, val enlarged: Boolean) {
+    companion object {
+        val Plain = ResetSegmentLook(ResetUrgency.RELAXED, bold = false, enlarged = false)
+
+        fun of(emphasized: Boolean, urgency: ResetUrgency): ResetSegmentLook =
+            if (!emphasized) Plain
+            else ResetSegmentLook(urgency, bold = true, enlarged = urgency != ResetUrgency.RELAXED)
     }
 }
