@@ -5,6 +5,29 @@
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
+    <!-- Counts UP from the last successful fetch, so a stalled refresh shows as a growing age. -->
+    <Chronometer
+        android:id="@+id/updated_age"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format="updated %s ago"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="#739A9A9A"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/footer_separator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text=" · "
+        android:textColor="#739A9A9A"
+        android:textSize="11sp"
+        android:visibility="gone" />
+
     <Chronometer
         android:id="@+id/next_refresh_countdown"
         android:layout_width="wrap_content"

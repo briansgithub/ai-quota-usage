@@ -2,7 +2,11 @@ package com.usagewidget.refresh
 
 import android.content.Context
 import androidx.work.CoroutineWorker
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.workDataOf
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -25,7 +29,9 @@ class UsageRefreshWorker(
             runCatching { WidgetPublisher.push(applicationContext) }
         }
         return try {
-            UsageRepository.get(applicationContext).refresh(allowHtmlFallback = true)
+            UsageRepository.get(applicationContext).refresh(
+                allowHtmlFallback = inputData.getBoolean(KEY_HTML_FALLBACK, true)
+            )
             Result.success()
         } catch (_: Exception) {
             Result.retry()
@@ -36,6 +42,8 @@ class UsageRefreshWorker(
         const val PERIODIC_NAME = "usage-widget-periodic"
         const val PERIODIC_TAG = "usage-widget-periodic-tag"
         const val ONCE_NAME = "usage-widget-once"
+        const val EXPEDITED_NAME = "usage-widget-expedited"
+        private const val KEY_HTML_FALLBACK = "html_fallback"
 
         fun enqueuePeriodic(
             context: Context,
@@ -52,6 +60,9 @@ class UsageRefreshWorker(
                 TimeUnit.MILLISECONDS
             )
                 .addTag(PERIODIC_TAG)
+                // Without a network the run only records a failure and waits another
+                // period; with the constraint it fires as soon as the network is back.
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 PERIODIC_NAME,
@@ -72,6 +83,24 @@ class UsageRefreshWorker(
             WorkManager.getInstance(context).enqueueUniqueWork(
                 ONCE_NAME,
                 ExistingWorkPolicy.REPLACE,
+                request
+            )
+        }
+
+        /**
+         * Immediate refresh for the widget's refresh button and screen-on/unlock.
+         * Runs as expedited work (no network in a broadcast receiver, so no ANR; not
+         * held back by Doze/standby job deferral) and does not use the hidden WebView,
+         * like the in-app refresh. KEEP: a tap while one is running does not restart it.
+         */
+        fun enqueueExpedited(context: Context) {
+            val request = OneTimeWorkRequestBuilder<UsageRefreshWorker>()
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .setInputData(workDataOf(KEY_HTML_FALLBACK to false))
+                .build()
+            WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+                EXPEDITED_NAME,
+                ExistingWorkPolicy.KEEP,
                 request
             )
         }
