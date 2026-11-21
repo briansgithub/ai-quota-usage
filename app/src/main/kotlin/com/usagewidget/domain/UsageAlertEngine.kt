@@ -106,7 +106,7 @@ object UsageAlertEngine {
     }
 
     private fun restoredAlert(event: RestoredUsageEvent): AlertToPost {
-        val remaining = event.newRemaining?.roundToInt()?.let { "$it% left" } ?: "ready to use"
+        val remaining = event.newRemaining?.roundToInt()?.let { "${100 - it}% used" } ?: "ready to use"
         val body = when (event.group) {
             "codex.five_hour" -> "Codex 5-hour limit has reset ($remaining)."
             "codex.weekly" -> "Codex weekly limit has reset ($remaining)."

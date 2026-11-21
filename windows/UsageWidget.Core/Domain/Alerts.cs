@@ -232,7 +232,7 @@ public static class UsageAlertEngine
 
     private static AlertToPost RestoredAlert(RestoredUsageEvent e)
     {
-        var remaining = e.NewRemaining is { } r ? $"{(int)Math.Round(r, MidpointRounding.AwayFromZero)}% left" : "ready to use";
+        var remaining = e.NewRemaining is { } r ? $"{100 - (int)Math.Round(r, MidpointRounding.AwayFromZero)}% used" : "ready to use";
         var body = e.Group switch
         {
             "codex.five_hour" => $"Codex 5-hour limit has reset ({remaining}).",
