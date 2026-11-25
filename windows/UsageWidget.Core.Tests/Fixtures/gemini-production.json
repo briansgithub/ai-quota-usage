@@ -1,0 +1,21 @@
+{
+  "groups": [
+    {
+      "displayName": "Gemini",
+      "buckets": [
+        {
+          "bucketId": "gemini-5h",
+          "remainingFraction": 1,
+          "window": "5h",
+          "resetTime": "2026-11-25T05:00:00Z"
+        },
+        {
+          "bucketId": "gemini-weekly",
+          "remainingFraction": 0.8,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    }
+  ]
+}

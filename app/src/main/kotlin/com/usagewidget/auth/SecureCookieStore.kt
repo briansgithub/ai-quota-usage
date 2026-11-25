@@ -30,6 +30,7 @@ class SecureCookieStore private constructor(private val prefs: SharedPreferences
 
     fun hasSession(provider: ProviderId): Boolean {
         return when (provider) {
+            ProviderId.GEMINI -> geminiTokens() != null
             ProviderId.CURSOR ->
                 hostsFor(provider).any { header ->
                     cookieMap(header).keys.any { it.equals(CursorEndpoints.SESSION_COOKIE, true) }
@@ -111,7 +112,12 @@ class SecureCookieStore private constructor(private val prefs: SharedPreferences
         saveCookies(host, current.entries.joinToString("; ") { "${it.key}=${it.value}" })
     }
 
+    fun geminiTokens(): String? = prefs.getString("gemini.oauth", null)
+
+    fun saveGeminiTokens(json: String) { prefs.edit().putString("gemini.oauth", json).apply() }
+
     fun clear(provider: ProviderId) {
+        if (provider == ProviderId.GEMINI) prefs.edit().remove("gemini.oauth").apply()
         for (host in providerHosts(provider)) {
             val key = host.removePrefix("www.")
             memory.remove(key)
@@ -140,6 +146,7 @@ class SecureCookieStore private constructor(private val prefs: SharedPreferences
         ProviderId.CURSOR -> CursorEndpoints.cookieHosts
         ProviderId.OPENAI -> OpenAiEndpoints.cookieHosts
         ProviderId.CLAUDE -> ClaudeEndpoints.cookieHosts
+        ProviderId.GEMINI -> emptyList()
     }
 
     private fun cookieKey(host: String) = "cookie.$host"

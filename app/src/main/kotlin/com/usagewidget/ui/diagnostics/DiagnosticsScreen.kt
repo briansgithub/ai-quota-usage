@@ -208,6 +208,11 @@ fun DiagnosticsScreen(
                     checked = QuotaRuleId.CLAUDE_WEEKLY.wire in quota.enabledRules,
                     onCheckedChange = { viewModel.setQuotaClaudeWeeklyEnabled(it) }
                 )
+                SettingSwitch(
+                    label = "Gemini (Antigravity) quota",
+                    checked = QuotaRuleId.GEMINI_FIVE_HOUR.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaGeminiEnabled(it) }
+                )
                 var thresholdsCsv by rememberSaveable(quota.thresholdsCsv) { mutableStateOf(quota.thresholdsCsv) }
                 OutlinedTextField(
                     value = thresholdsCsv,

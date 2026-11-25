@@ -74,6 +74,7 @@ public static class GlanceUsage
         ClaudeMeterIds.Weekly => "Claude Weekly",
         ClaudeMeterIds.WeeklyOpus => "Claude Opus",
         ClaudeMeterIds.WeeklySonnet => "Claude Sonnet",
+        _ when section == SoftwareSectionId.Gemini => meter.Title,
         _ => string.IsNullOrWhiteSpace(meter.Title) ? section.Title() : $"{section.Title()} {meter.Title}"
     };
 

@@ -91,7 +91,7 @@ class LoginActivity : ComponentActivity() {
         const val EXTRA_PROVIDER = "provider"
 
         fun intent(context: Context, provider: ProviderId): Intent =
-            Intent(context, LoginActivity::class.java).putExtra(EXTRA_PROVIDER, provider.wireName)
+            Intent(context, if (provider == ProviderId.GEMINI) GeminiLoginActivity::class.java else LoginActivity::class.java).putExtra(EXTRA_PROVIDER, provider.wireName)
     }
 }
 
@@ -261,4 +261,5 @@ private fun pasteHost(provider: ProviderId): String = when (provider) {
     ProviderId.CURSOR -> "cursor.com"
     ProviderId.OPENAI -> "chatgpt.com"
     ProviderId.CLAUDE -> "claude.ai"
+    ProviderId.GEMINI -> "accounts.google.com"
 }

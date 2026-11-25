@@ -84,7 +84,12 @@ enum class QuotaRuleId(
         windowLabel = "weekly",
         defaultEnabled = true,
         notificationId = 6406
-    );
+    ),
+    GEMINI_FIVE_HOUR("gemini.gemini-5h", "gemini.gemini-5h", SoftwareSectionId.GEMINI, "Gemini", "5-hour", false, 6407),
+    GEMINI_WEEKLY("gemini.gemini-weekly", "gemini.gemini-weekly", SoftwareSectionId.GEMINI, "Gemini", "weekly", false, 6408),
+    GEMINI_THIRD_PARTY_FIVE_HOUR("gemini.3p-5h", "gemini.3p-5h", SoftwareSectionId.GEMINI, "Gemini", "third-party 5-hour", false, 6409),
+    GEMINI_THIRD_PARTY_WEEKLY("gemini.3p-weekly", "gemini.3p-weekly", SoftwareSectionId.GEMINI, "Gemini", "third-party weekly", false, 6410),
+    GEMINI_ARGON_WEEKLY("gemini.argon-weekly", "gemini.argon-weekly", SoftwareSectionId.GEMINI, "Gemini", "Argon weekly", false, 6411);
 
     companion object {
         val DEFAULT_ENABLED: Set<String> = entries.filter { it.defaultEnabled }.map { it.wire }.toSet()

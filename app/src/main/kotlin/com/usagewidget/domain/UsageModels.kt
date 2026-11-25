@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 enum class ProviderId(val wireName: String, val displayName: String) {
     CURSOR("cursor", "Cursor"),
     OPENAI("openai", "ChatGPT / Codex"),
-    CLAUDE("claude", "Claude");
+    CLAUDE("claude", "Claude"),
+    GEMINI("gemini", "Gemini (Antigravity)");
 
     companion object {
         fun fromWire(value: String): ProviderId =

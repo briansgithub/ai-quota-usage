@@ -57,7 +57,14 @@ public static class UsageSections
             CursorSection(cursor, hydrated.Health(SoftwareSectionId.Cursor), nowMs),
             GrokSection(cursor, hydrated.Health(SoftwareSectionId.GrokBot), nowMs),
             CodexSection(openai, hydrated.Health(SoftwareSectionId.Codex), nowMs),
-            ClaudeSection(claude, hydrated.Health(SoftwareSectionId.Claude), nowMs)
+            ClaudeSection(claude, hydrated.Health(SoftwareSectionId.Claude), nowMs),
+            new SoftwareSection(SoftwareSectionId.Gemini, ProviderId.Gemini,
+                hydrated.Provider(ProviderId.Gemini)?.ProviderStatus ?? ProviderStatus.Unsigned,
+                Subtitle: hydrated.Provider(ProviderId.Gemini)?.PlanLabel,
+                Error: hydrated.Provider(ProviderId.Gemini)?.Error,
+                Meters: hydrated.Provider(ProviderId.Gemini)?.MeterList,
+                Health: hydrated.Health(SoftwareSectionId.Gemini),
+                Stale: hydrated.Health(SoftwareSectionId.Gemini).StaleView(nowMs))
         };
     }
 

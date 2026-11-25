@@ -209,6 +209,7 @@ object MeterIds {
             SoftwareSectionId.GROK_BOT -> grokMeters(meters)
             SoftwareSectionId.CODEX -> codexMeters(meters)
             SoftwareSectionId.CLAUDE -> claudeMeters(meters)
+            SoftwareSectionId.GEMINI -> meters.filter { it.id.startsWith("gemini.") }
         }
 }
 
@@ -223,7 +224,8 @@ object HealthSynthesis {
             synthesized(SoftwareSectionId.CURSOR, cursor, MeterIds.cursorMeters(cursor?.meters.orEmpty()), at),
             synthesized(SoftwareSectionId.GROK_BOT, cursor, MeterIds.grokMeters(cursor?.meters.orEmpty()), at),
             synthesized(SoftwareSectionId.CODEX, openai, MeterIds.codexMeters(openai?.meters.orEmpty()), at),
-            synthesized(SoftwareSectionId.CLAUDE, claude, MeterIds.claudeMeters(claude?.meters.orEmpty()), at)
+            synthesized(SoftwareSectionId.CLAUDE, claude, MeterIds.claudeMeters(claude?.meters.orEmpty()), at),
+            synthesized(SoftwareSectionId.GEMINI, snapshot.provider(ProviderId.GEMINI), snapshot.provider(ProviderId.GEMINI)?.meters.orEmpty(), at)
         )
         return snapshot.copy(sectionHealth = health)
     }

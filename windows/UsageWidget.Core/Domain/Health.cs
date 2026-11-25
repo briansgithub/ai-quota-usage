@@ -184,6 +184,7 @@ public static class MeterIds
             SoftwareSectionId.GrokBot => GrokMeters(meters),
             SoftwareSectionId.Codex => CodexMeters(meters),
             SoftwareSectionId.Claude => ClaudeMeters(meters),
+            SoftwareSectionId.Gemini => meters.Where(m => m.Id.StartsWith("gemini.")).ToList(),
             _ => new List<UsageMeter>()
         };
 }
@@ -202,7 +203,8 @@ public static class HealthSynthesis
             Synthesized(SoftwareSectionId.Cursor, cursor, MeterIds.CursorMeters(cursor?.MeterList ?? Array.Empty<UsageMeter>()), at),
             Synthesized(SoftwareSectionId.GrokBot, cursor, MeterIds.GrokMeters(cursor?.MeterList ?? Array.Empty<UsageMeter>()), at),
             Synthesized(SoftwareSectionId.Codex, openai, MeterIds.CodexMeters(openai?.MeterList ?? Array.Empty<UsageMeter>()), at),
-            Synthesized(SoftwareSectionId.Claude, claude, MeterIds.ClaudeMeters(claude?.MeterList ?? Array.Empty<UsageMeter>()), at)
+            Synthesized(SoftwareSectionId.Claude, claude, MeterIds.ClaudeMeters(claude?.MeterList ?? Array.Empty<UsageMeter>()), at),
+            Synthesized(SoftwareSectionId.Gemini, snapshot.Provider(ProviderId.Gemini), snapshot.Provider(ProviderId.Gemini)?.MeterList.ToList() ?? new List<UsageMeter>(), at)
         };
         return snapshot with { SectionHealth = health };
     }

@@ -17,6 +17,7 @@ public sealed class UsageRepository
     private readonly CursorUsageClient _cursor;
     private readonly OpenAiUsageClient _openai;
     private readonly ClaudeUsageClient _claude;
+    private readonly GeminiUsageClient _gemini;
     private readonly IHtmlExtractor _html;
     private readonly object _gate = new();
     private UsageSnapshot _snapshot;
@@ -29,6 +30,7 @@ public sealed class UsageRepository
         _cursor = new CursorUsageClient(_http, cookies);
         _openai = new OpenAiUsageClient(_http, cookies);
         _claude = new ClaudeUsageClient(_http, cookies);
+        _gemini = new GeminiUsageClient(cookies);
         _html = html ?? new NullHtmlExtractor();
         _snapshot = LoadCached() ?? UsageSnapshot.Empty(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
@@ -41,6 +43,8 @@ public sealed class UsageRepository
     public bool Refreshing { get { lock (_gate) return _refreshing; } }
     public bool HasSession(ProviderId provider) => _cookies.HasSession(provider);
     public ICookieStore Cookies => _cookies;
+
+    public void ConnectGemini() => _cookies.SaveCookies(GeminiOAuth.StorageKey, "disabled=0");
 
     public UsageSnapshot Refresh(bool allowHtmlFallback = true)
     {
@@ -58,12 +62,14 @@ public sealed class UsageRepository
             now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var cursorResult = FetchProvider(ProviderId.Cursor, allowHtmlFallback, now);
             var openaiResult = FetchProvider(ProviderId.OpenAi, allowHtmlFallback, now);
+            var geminiResult = _gemini.Fetch(now);
             var claudeResult = FetchProvider(ProviderId.Claude, allowHtmlFallback, now);
             var combined = SnapshotMerger.Merge(previous, new[]
             {
                 new SnapshotMerger.ProviderRound(ProviderId.Cursor, cursorResult, _cookies.HasSession(ProviderId.Cursor)),
                 new SnapshotMerger.ProviderRound(ProviderId.OpenAi, openaiResult, _cookies.HasSession(ProviderId.OpenAi)),
-                new SnapshotMerger.ProviderRound(ProviderId.Claude, claudeResult, _cookies.HasSession(ProviderId.Claude))
+                new SnapshotMerger.ProviderRound(ProviderId.Claude, claudeResult, _cookies.HasSession(ProviderId.Claude)),
+                new SnapshotMerger.ProviderRound(ProviderId.Gemini, geminiResult, geminiResult is not ProviderResult.NeedsSignIn)
             }, now);
             Persist(combined);
             lock (_gate) _snapshot = combined;

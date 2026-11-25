@@ -201,6 +201,13 @@ internal sealed class AppHost : IDisposable
 
     public void OpenSignIn(ProviderId provider, SoftwareSectionId sectionId, bool reauth)
     {
+        if (provider == ProviderId.Gemini)
+        {
+            _repo.ConnectGemini();
+            System.Windows.MessageBox.Show("Sign in using Antigravity on this PC, then refresh Usage Widget. Credentials are read from your .gemini folder; the source files are never changed.", "Gemini (Antigravity)");
+            _ = RefreshNow();
+            return;
+        }
         var win = new SignInWindow(this, provider, sectionId, reauth);
         win.Show();
     }
@@ -344,6 +351,7 @@ internal sealed class AppHost : IDisposable
         menu.Items.Add("Sign in to Cursor", null, (_, _) => OpenSignIn(ProviderId.Cursor, SoftwareSectionId.Cursor, false));
         menu.Items.Add("Sign in to Cursor for Grok Bot", null, (_, _) => OpenSignIn(ProviderId.Cursor, SoftwareSectionId.GrokBot, false));
         menu.Items.Add("Sign in to ChatGPT for Codex", null, (_, _) => OpenSignIn(ProviderId.OpenAi, SoftwareSectionId.Codex, false));
+        menu.Items.Add("Connect Gemini (Antigravity)", null, (_, _) => OpenSignIn(ProviderId.Gemini, SoftwareSectionId.Gemini, false));
         menu.Items.Add("Sign in to Claude", null, (_, _) => OpenSignIn(ProviderId.Claude, SoftwareSectionId.Claude, false));
         menu.Items.Add(new Forms.ToolStripSeparator());
         _alwaysOnTopItem = new Forms.ToolStripMenuItem("Always on top") { Checked = Settings.AlwaysOnTop, CheckOnClick = true };

@@ -72,6 +72,7 @@ class HiddenWebViewExtractor(private val appContext: Context) {
         ProviderId.OPENAI -> OpenAiEndpoints.USAGE_PAGE
         // Claude is read as JSON via [readClaudeUsageJson]; the page is only a fallback.
         ProviderId.CLAUDE -> ClaudeEndpoints.USAGE_PAGE
+        ProviderId.GEMINI -> error("Gemini uses Cloud Code")
     }
 
     /**

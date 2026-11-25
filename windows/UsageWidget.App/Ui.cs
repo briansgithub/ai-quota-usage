@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -891,6 +892,7 @@ internal sealed class DashboardWindow : Window
         stack.Children.Add(Ui.Check("Codex 5-hour quota (off by default)", s.QuotaCodexFiveHourEnabled, v => s.QuotaCodexFiveHourEnabled = v));
         stack.Children.Add(Ui.Check("Codex weekly quota (off by default)", s.QuotaCodexWeeklyEnabled, v => s.QuotaCodexWeeklyEnabled = v));
         stack.Children.Add(Ui.Check("Claude session quota", s.QuotaClaudeFiveHourEnabled, v => s.QuotaClaudeFiveHourEnabled = v));
+        stack.Children.Add(Ui.Check("Gemini (Antigravity) quota", s.QuotaGeminiEnabled, v => s.QuotaGeminiEnabled = v));
         stack.Children.Add(Ui.Check("Claude weekly quota", s.QuotaClaudeWeeklyEnabled, v => s.QuotaClaudeWeeklyEnabled = v));
         stack.Children.Add(Ui.T("Remaining % thresholds (comma-separated)", Theme.MutedBrush, 12));
         var thresholds = new TextBox

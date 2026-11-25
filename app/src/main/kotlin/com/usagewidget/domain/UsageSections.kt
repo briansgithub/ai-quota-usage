@@ -6,7 +6,8 @@ enum class SoftwareSectionId(val title: String, val wireName: String) {
     CURSOR("Cursor", "cursor"),
     GROK_BOT("Grok Bot", "grok_bot"),
     CODEX("Codex", "codex"),
-    CLAUDE("Claude", "claude");
+    CLAUDE("Claude", "claude"),
+    GEMINI("Gemini", "gemini");
 
     companion object {
         fun fromWire(value: String): SoftwareSectionId =
@@ -62,7 +63,14 @@ object UsageSections {
             cursorSection(cursor, hydrated.health(SoftwareSectionId.CURSOR), nowMs),
             grokSection(cursor, hydrated.health(SoftwareSectionId.GROK_BOT), nowMs),
             codexSection(openai, hydrated.health(SoftwareSectionId.CODEX), nowMs),
-            claudeSection(claude, hydrated.health(SoftwareSectionId.CLAUDE), nowMs)
+            claudeSection(claude, hydrated.health(SoftwareSectionId.CLAUDE), nowMs),
+            SoftwareSection(SoftwareSectionId.GEMINI, ProviderId.GEMINI,
+                hydrated.provider(ProviderId.GEMINI)?.providerStatus ?: ProviderStatus.UNSIGNED,
+                subtitle = hydrated.provider(ProviderId.GEMINI)?.planLabel,
+                error = hydrated.provider(ProviderId.GEMINI)?.error,
+                meters = hydrated.provider(ProviderId.GEMINI)?.meters.orEmpty(),
+                health = hydrated.health(SoftwareSectionId.GEMINI),
+                stale = hydrated.health(SoftwareSectionId.GEMINI).staleView(nowMs))
         )
     }
 

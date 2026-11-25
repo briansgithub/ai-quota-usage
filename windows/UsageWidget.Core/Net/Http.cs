@@ -99,6 +99,7 @@ public sealed class MemoryCookieStore : ICookieStore
 
     public bool HasSession(ProviderId provider)
     {
+        if (provider == ProviderId.Gemini) return CookieUtil.CookieMap(GetHeader(GeminiOAuth.StorageKey)).ContainsKey("oauth");
         foreach (var host in CookieUtil.HostsFor(provider))
         {
             var header = GetHeader(host);
@@ -140,6 +141,7 @@ public sealed class MemoryCookieStore : ICookieStore
 
     public void Clear(ProviderId provider)
     {
+        if (provider == ProviderId.Gemini) _cookies[GeminiOAuth.StorageKey] = "disabled=1";
         foreach (var host in CookieUtil.HostsFor(provider))
         {
             var key = host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? host[4..] : host;

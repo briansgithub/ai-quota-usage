@@ -172,6 +172,10 @@ class AppSettings private constructor(context: Context) {
             publishQuota()
         }
 
+    var quotaGeminiEnabled: Boolean
+        get() = prefs.getBoolean("quota_gemini_enabled", false)
+        set(value) { prefs.edit().putBoolean("quota_gemini_enabled", value).apply(); publishQuota() }
+
     var quotaClaudeWeeklyEnabled: Boolean
         get() = prefs.getBoolean(KEY_QUOTA_CLAUDE_WEEKLY, QuotaRuleId.CLAUDE_WEEKLY.defaultEnabled)
         set(value) {
@@ -261,6 +265,7 @@ class AppSettings private constructor(context: Context) {
             if (quotaCodexWeeklyEnabled) add(QuotaRuleId.CODEX_WEEKLY.wire)
             if (quotaClaudeFiveHourEnabled) add(QuotaRuleId.CLAUDE_FIVE_HOUR.wire)
             if (quotaClaudeWeeklyEnabled) add(QuotaRuleId.CLAUDE_WEEKLY.wire)
+            if (quotaGeminiEnabled) addAll(QuotaRuleId.entries.filter { it.section == com.usagewidget.domain.SoftwareSectionId.GEMINI }.map { it.wire })
         }
         return QuotaThresholdPreferences(
             masterEnabled = quotaAlertsEnabled,

@@ -123,7 +123,7 @@ internal sealed class DpapiCookieStore : ICookieStore
         lock (_gate)
         {
             var dump = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var host in CursorEndpoints.CookieHosts.Concat(OpenAiEndpoints.CookieHosts).Concat(ClaudeEndpoints.CookieHosts))
+            foreach (var host in CursorEndpoints.CookieHosts.Concat(OpenAiEndpoints.CookieHosts).Concat(ClaudeEndpoints.CookieHosts).Append(GeminiOAuth.StorageKey))
             {
                 var header = _memory.GetHeader(host);
                 if (!string.IsNullOrWhiteSpace(header))

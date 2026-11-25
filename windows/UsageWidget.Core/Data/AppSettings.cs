@@ -61,6 +61,7 @@ public sealed class AppSettings
     public bool QuotaCodexFiveHourEnabled { get => _state.QuotaCodexFiveHourEnabled; set => Set(s => s with { QuotaCodexFiveHourEnabled = value }); }
     public bool QuotaCodexWeeklyEnabled { get => _state.QuotaCodexWeeklyEnabled; set => Set(s => s with { QuotaCodexWeeklyEnabled = value }); }
     public bool QuotaClaudeFiveHourEnabled { get => _state.QuotaClaudeFiveHourEnabled; set => Set(s => s with { QuotaClaudeFiveHourEnabled = value }); }
+    public bool QuotaGeminiEnabled { get => _state.QuotaGeminiEnabled; set => Set(s => s with { QuotaGeminiEnabled = value }); }
     public bool QuotaClaudeWeeklyEnabled { get => _state.QuotaClaudeWeeklyEnabled; set => Set(s => s with { QuotaClaudeWeeklyEnabled = value }); }
     public bool ShowCursorOnDemand { get => _state.ShowCursorOnDemand; set => Set(s => s with { ShowCursorOnDemand = value }); }
     public bool ShowGrokOnDemand { get => _state.ShowGrokOnDemand; set => Set(s => s with { ShowGrokOnDemand = value }); }
@@ -97,6 +98,8 @@ public sealed class AppSettings
         if (QuotaCodexWeeklyEnabled) enabled.Add(QuotaRuleId.CodexWeekly.Wire());
         if (QuotaClaudeFiveHourEnabled) enabled.Add(QuotaRuleId.ClaudeFiveHour.Wire());
         if (QuotaClaudeWeeklyEnabled) enabled.Add(QuotaRuleId.ClaudeWeekly.Wire());
+        if (QuotaGeminiEnabled)
+            foreach (var rule in QuotaRuleIds.All.Where(r => r.Section() == SoftwareSectionId.Gemini)) enabled.Add(rule.Wire());
         return new QuotaThresholdPreferences(
             QuotaAlertsEnabled,
             QuotaThresholds.ParseCsv(QuotaThresholdsCsv),
@@ -174,7 +177,8 @@ public sealed record SettingsState(
     Dictionary<string, QuotaThresholdState>? QuotaFiredStates = null,
     bool ShowCursorOnDemand = true,
     bool ShowGrokOnDemand = true,
-    List<string>? HiddenWidgetBars = null);
+    List<string>? HiddenWidgetBars = null,
+    bool QuotaGeminiEnabled = false);
 
 public interface ISettingsStore
 {

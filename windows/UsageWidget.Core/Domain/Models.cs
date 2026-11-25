@@ -4,7 +4,8 @@ public enum ProviderId
 {
     Cursor,
     OpenAi,
-    Claude
+    Claude,
+    Gemini
 }
 
 public static class ProviderIds
@@ -14,6 +15,7 @@ public static class ProviderIds
         ProviderId.Cursor => "cursor",
         ProviderId.OpenAi => "openai",
         ProviderId.Claude => "claude",
+        ProviderId.Gemini => "gemini",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -22,6 +24,7 @@ public static class ProviderIds
         ProviderId.Cursor => "Cursor",
         ProviderId.OpenAi => "ChatGPT / Codex",
         ProviderId.Claude => "Claude",
+        ProviderId.Gemini => "Gemini",
         _ => id.ToString()
     };
 
@@ -29,6 +32,7 @@ public static class ProviderIds
         value.Equals("cursor", StringComparison.OrdinalIgnoreCase) ? ProviderId.Cursor
         : value.Equals("openai", StringComparison.OrdinalIgnoreCase) ? ProviderId.OpenAi
         : value.Equals("claude", StringComparison.OrdinalIgnoreCase) ? ProviderId.Claude
+        : value.Equals("gemini", StringComparison.OrdinalIgnoreCase) ? ProviderId.Gemini
         : throw new ArgumentException($"Unknown provider: {value}");
 }
 
@@ -36,7 +40,7 @@ public enum ProviderStatus { Ok, NeedsSignIn, Error, Unsigned, Loading }
 
 public enum MeterBarKind { Pace, Cap }
 
-public enum SoftwareSectionId { Cursor, GrokBot, Codex, Claude }
+public enum SoftwareSectionId { Cursor, GrokBot, Codex, Claude, Gemini }
 
 public static class SoftwareSectionIds
 {
@@ -46,6 +50,7 @@ public static class SoftwareSectionIds
         SoftwareSectionId.GrokBot => "Grok Bot",
         SoftwareSectionId.Codex => "Codex",
         SoftwareSectionId.Claude => "Claude",
+        SoftwareSectionId.Gemini => "Gemini",
         _ => id.ToString()
     };
 
@@ -55,6 +60,7 @@ public static class SoftwareSectionIds
         SoftwareSectionId.GrokBot => "grok_bot",
         SoftwareSectionId.Codex => "codex",
         SoftwareSectionId.Claude => "claude",
+        SoftwareSectionId.Gemini => "gemini",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -63,10 +69,11 @@ public static class SoftwareSectionIds
         : value.Equals("grok_bot", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.GrokBot
         : value.Equals("codex", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.Codex
         : value.Equals("claude", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.Claude
+        : value.Equals("gemini", StringComparison.OrdinalIgnoreCase) ? SoftwareSectionId.Gemini
         : throw new ArgumentException($"Unknown section: {value}");
 
     public static IReadOnlyList<SoftwareSectionId> All { get; } =
-        new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot, SoftwareSectionId.Codex, SoftwareSectionId.Claude };
+        new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot, SoftwareSectionId.Codex, SoftwareSectionId.Claude, SoftwareSectionId.Gemini };
 }
 
 public sealed record UsageMeter(

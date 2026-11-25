@@ -29,6 +29,7 @@ public static class AuthCopy
         SoftwareSectionId.GrokBot => "Sign in to Cursor for Grok Bot",
         SoftwareSectionId.Codex => "Sign in to ChatGPT for Codex",
         SoftwareSectionId.Claude => "Sign in to Claude",
+        SoftwareSectionId.Gemini => "Connect Gemini (Antigravity)",
         _ => "Sign in to Cursor"
     };
 

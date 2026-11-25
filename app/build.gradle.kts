@@ -9,7 +9,8 @@ android {
   compileSdk = 36
   signingConfigs {
     getByName("debug") {
-      val persisted = file("/cursor/stores/self/usage-widget-debug.keystore")
+      val persisted = file("/cursor/stores/self/usage-widget-debug.keystore").takeIf { it.isFile }
+        ?: file("${System.getenv("USERPROFILE") ?: System.getProperty("user.home")}/.usage-widget/usage-widget-debug.keystore")
       if (persisted.isFile) {
         storeFile = persisted
         storePassword = "android"
@@ -22,8 +23,8 @@ android {
     applicationId = "com.usagewidget"
     minSdk = 34
     targetSdk = 36
-    versionCode = 17
-    versionName = "1.5.2"
+    versionCode = 18
+    versionName = "1.6.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 

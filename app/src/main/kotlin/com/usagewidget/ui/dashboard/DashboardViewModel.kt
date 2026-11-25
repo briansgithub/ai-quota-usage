@@ -102,6 +102,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         repo.settings().quotaClaudeFiveHourEnabled = enabled
     }
 
+    fun setQuotaGeminiEnabled(enabled: Boolean) { repo.settings().quotaGeminiEnabled = enabled }
+
     fun setQuotaClaudeWeeklyEnabled(enabled: Boolean) {
         repo.settings().quotaClaudeWeeklyEnabled = enabled
     }

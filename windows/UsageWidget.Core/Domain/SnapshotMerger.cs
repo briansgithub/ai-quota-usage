@@ -10,6 +10,7 @@ public static class SnapshotMerger
         ProviderId.Cursor => new[] { SoftwareSectionId.Cursor, SoftwareSectionId.GrokBot },
         ProviderId.OpenAi => new[] { SoftwareSectionId.Codex },
         ProviderId.Claude => new[] { SoftwareSectionId.Claude },
+        ProviderId.Gemini => new[] { SoftwareSectionId.Gemini },
         _ => Array.Empty<SoftwareSectionId>()
     };
 
@@ -17,6 +18,7 @@ public static class SnapshotMerger
     {
         SoftwareSectionId.Codex => ProviderId.OpenAi,
         SoftwareSectionId.Claude => ProviderId.Claude,
+        SoftwareSectionId.Gemini => ProviderId.Gemini,
         _ => ProviderId.Cursor
     };
 
@@ -65,7 +67,7 @@ public static class SnapshotMerger
             MarkUnsignedOrExpired(round.SignedIn, SectionsOf(round.Provider).ToArray(), attempts, health, nowMs);
 
         var providers = new List<ProviderSnapshot>();
-        foreach (var id in new[] { ProviderId.Cursor, ProviderId.OpenAi, ProviderId.Claude })
+        foreach (var id in new[] { ProviderId.Cursor, ProviderId.OpenAi, ProviderId.Claude, ProviderId.Gemini })
         {
             if (!byProvider.TryGetValue(id, out var round))
             {

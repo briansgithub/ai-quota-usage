@@ -38,7 +38,12 @@ public enum QuotaRuleId
     CodexFiveHour,
     CodexWeekly,
     ClaudeFiveHour,
-    ClaudeWeekly
+    ClaudeWeekly,
+    GeminiFiveHour,
+    GeminiWeekly,
+    GeminiThirdPartyFiveHour,
+    GeminiThirdPartyWeekly,
+    GeminiArgonWeekly
 }
 
 public static class QuotaRuleIds
@@ -51,6 +56,11 @@ public static class QuotaRuleIds
         QuotaRuleId.CodexWeekly => "codex.weekly",
         QuotaRuleId.ClaudeFiveHour => "claude.five_hour",
         QuotaRuleId.ClaudeWeekly => "claude.weekly",
+        QuotaRuleId.GeminiArgonWeekly => "gemini.argon-weekly",
+        QuotaRuleId.GeminiThirdPartyWeekly => "gemini.3p-weekly",
+        QuotaRuleId.GeminiThirdPartyFiveHour => "gemini.3p-5h",
+        QuotaRuleId.GeminiWeekly => "gemini.gemini-weekly",
+        QuotaRuleId.GeminiFiveHour => "gemini.gemini-5h",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -62,6 +72,11 @@ public static class QuotaRuleIds
         QuotaRuleId.CodexWeekly => "openai.weekly",
         QuotaRuleId.ClaudeFiveHour => ClaudeMeterIds.FiveHour,
         QuotaRuleId.ClaudeWeekly => ClaudeMeterIds.Weekly,
+        QuotaRuleId.GeminiArgonWeekly => "gemini.argon-weekly",
+        QuotaRuleId.GeminiThirdPartyWeekly => "gemini.3p-weekly",
+        QuotaRuleId.GeminiThirdPartyFiveHour => "gemini.3p-5h",
+        QuotaRuleId.GeminiWeekly => "gemini.gemini-weekly",
+        QuotaRuleId.GeminiFiveHour => "gemini.gemini-5h",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -73,6 +88,11 @@ public static class QuotaRuleIds
         QuotaRuleId.CodexWeekly => SoftwareSectionId.Codex,
         QuotaRuleId.ClaudeFiveHour => SoftwareSectionId.Claude,
         QuotaRuleId.ClaudeWeekly => SoftwareSectionId.Claude,
+        QuotaRuleId.GeminiArgonWeekly => SoftwareSectionId.Gemini,
+        QuotaRuleId.GeminiThirdPartyWeekly => SoftwareSectionId.Gemini,
+        QuotaRuleId.GeminiThirdPartyFiveHour => SoftwareSectionId.Gemini,
+        QuotaRuleId.GeminiWeekly => SoftwareSectionId.Gemini,
+        QuotaRuleId.GeminiFiveHour => SoftwareSectionId.Gemini,
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -84,6 +104,11 @@ public static class QuotaRuleIds
         QuotaRuleId.CodexWeekly => "Codex",
         QuotaRuleId.ClaudeFiveHour => "Claude",
         QuotaRuleId.ClaudeWeekly => "Claude",
+        QuotaRuleId.GeminiArgonWeekly => "Gemini",
+        QuotaRuleId.GeminiThirdPartyWeekly => "Gemini",
+        QuotaRuleId.GeminiThirdPartyFiveHour => "Gemini",
+        QuotaRuleId.GeminiWeekly => "Gemini",
+        QuotaRuleId.GeminiFiveHour => "Gemini",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -95,6 +120,11 @@ public static class QuotaRuleIds
         QuotaRuleId.CodexWeekly => "weekly",
         QuotaRuleId.ClaudeFiveHour => "session",
         QuotaRuleId.ClaudeWeekly => "weekly",
+        QuotaRuleId.GeminiArgonWeekly => "Argon weekly",
+        QuotaRuleId.GeminiThirdPartyWeekly => "third-party weekly",
+        QuotaRuleId.GeminiThirdPartyFiveHour => "third-party 5-hour",
+        QuotaRuleId.GeminiWeekly => "weekly",
+        QuotaRuleId.GeminiFiveHour => "5-hour",
         _ => throw new ArgumentOutOfRangeException(nameof(id))
     };
 
@@ -109,13 +139,19 @@ public static class QuotaRuleIds
         QuotaRuleId.CodexWeekly => 6404,
         QuotaRuleId.ClaudeFiveHour => 6405,
         QuotaRuleId.ClaudeWeekly => 6406,
+        QuotaRuleId.GeminiArgonWeekly => 6411,
+        QuotaRuleId.GeminiThirdPartyWeekly => 6410,
+        QuotaRuleId.GeminiThirdPartyFiveHour => 6409,
+        QuotaRuleId.GeminiWeekly => 6408,
+        QuotaRuleId.GeminiFiveHour => 6407,
         _ => 6400
     };
 
     public static IReadOnlyList<QuotaRuleId> All { get; } = new[]
     {
         QuotaRuleId.GrokWeekly, QuotaRuleId.CursorModels, QuotaRuleId.CodexFiveHour, QuotaRuleId.CodexWeekly,
-        QuotaRuleId.ClaudeFiveHour, QuotaRuleId.ClaudeWeekly
+        QuotaRuleId.ClaudeFiveHour, QuotaRuleId.ClaudeWeekly,
+        QuotaRuleId.GeminiFiveHour, QuotaRuleId.GeminiWeekly, QuotaRuleId.GeminiThirdPartyFiveHour, QuotaRuleId.GeminiThirdPartyWeekly, QuotaRuleId.GeminiArgonWeekly
     };
 
     public static IReadOnlySet<string> DefaultEnabledWires { get; } =

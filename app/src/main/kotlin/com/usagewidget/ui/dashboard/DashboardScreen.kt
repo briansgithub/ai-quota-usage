@@ -522,6 +522,7 @@ private fun signInLabel(section: SoftwareSection): String = when (section.id) {
     SoftwareSectionId.GROK_BOT -> "Sign in to Cursor"
     SoftwareSectionId.CODEX -> "Sign in to ChatGPT"
     SoftwareSectionId.CLAUDE -> "Sign in to Claude"
+    SoftwareSectionId.GEMINI -> "Sign in with Google (Antigravity)"
     SoftwareSectionId.CURSOR -> "Sign in"
 }
 
