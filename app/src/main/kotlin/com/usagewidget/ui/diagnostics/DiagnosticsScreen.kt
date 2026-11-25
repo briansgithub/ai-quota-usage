@@ -118,7 +118,8 @@ fun DiagnosticsScreen(
                     onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
                     onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
                     onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
-                    onWidgetBar = viewModel::setWidgetBarVisible
+                    onWidgetBar = viewModel::setWidgetBarVisible,
+                    onMoveWidgetSection = viewModel::moveWidgetSection
                 )
                 HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
                 Text(

@@ -17,9 +17,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material.icons.outlined.FilterAltOff
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
@@ -57,6 +60,7 @@ fun DisplaySettings(
     onShowGrokOnDemand: (Boolean) -> Unit,
     onOnlyUsageRemaining: (Boolean) -> Unit,
     onWidgetBar: (meterId: String, visible: Boolean) -> Unit,
+    onMoveWidgetSection: (section: SoftwareSectionId, delta: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -85,18 +89,29 @@ fun DisplaySettings(
         }
         SettingsGroup(
             title = "Widget bars",
-            hint = "Tap a bar to show or hide it on the home-screen widget."
+            hint = "Tap a bar to show or hide it on the home-screen widget. Use the arrows to reorder software."
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                WidgetBars.catalog.groupBy { it.section }.forEach { (section, options) ->
-                    // On-demand hidden everywhere wins; its widget chip is shown off and disabled.
-                    val forcedOff = buildSet {
-                        if (!display.showCursorOnDemand) add("cursor.on_demand")
-                        if (!display.showGrokOnDemand) add(MeterIds.GROK_ON_DEMAND)
-                    }
+                // On-demand hidden everywhere wins; its widget chip is shown off and disabled.
+                val forcedOff = buildSet {
+                    if (!display.showCursorOnDemand) add("cursor.on_demand")
+                    if (!display.showGrokOnDemand) add(MeterIds.GROK_ON_DEMAND)
+                }
+                val bySection = WidgetBars.catalog.groupBy { it.section }
+                val orderedSections = WidgetBars.normalizeSectionOrder(display.widgetSectionOrder)
+                    .filter { it in bySection }
+                orderedSections.forEachIndexed { index, section ->
+                    val options = bySection.getValue(section)
                     val allHidden = options.all { it.meterId in display.hiddenWidgetBars || it.meterId in forcedOff }
                     Column {
-                        ServiceHeader(section, allHidden)
+                        ServiceHeader(
+                            section = section,
+                            allHidden = allHidden,
+                            canMoveUp = index > 0,
+                            canMoveDown = index < orderedSections.lastIndex,
+                            onMoveUp = { onMoveWidgetSection(section, -1) },
+                            onMoveDown = { onMoveWidgetSection(section, 1) }
+                        )
                         ChipRow {
                             options.forEach { option ->
                                 val forced = option.meterId in forcedOff
@@ -133,7 +148,14 @@ private fun SettingsGroup(title: String, hint: String, content: @Composable () -
 }
 
 @Composable
-private fun ServiceHeader(section: SoftwareSectionId, allHidden: Boolean) {
+private fun ServiceHeader(
+    section: SoftwareSectionId,
+    allHidden: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             painter = painterResource(NotificationIcons.forSection(section)),
@@ -149,7 +171,36 @@ private fun ServiceHeader(section: SoftwareSectionId, allHidden: Boolean) {
             modifier = Modifier.weight(1f)
         )
         if (allHidden) {
-            Text("Hidden", color = CursorMuted, style = MaterialTheme.typography.labelSmall)
+            Text(
+                "Hidden",
+                color = CursorMuted,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(end = 4.dp)
+            )
+        }
+        IconButton(
+            onClick = onMoveUp,
+            enabled = canMoveUp,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowUp,
+                contentDescription = "Move ${section.title} up",
+                tint = if (canMoveUp) CursorText else CursorMuted.copy(alpha = 0.35f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        IconButton(
+            onClick = onMoveDown,
+            enabled = canMoveDown,
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
+                contentDescription = "Move ${section.title} down",
+                tint = if (canMoveDown) CursorText else CursorMuted.copy(alpha = 0.35f),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

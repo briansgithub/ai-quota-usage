@@ -216,6 +216,27 @@ class AppSettings private constructor(context: Context) {
         publishDisplay()
     }
 
+    val widgetSectionOrder: List<com.usagewidget.domain.SoftwareSectionId>
+        get() {
+            val raw = prefs.getString(KEY_WIDGET_SECTION_ORDER, null)
+            return com.usagewidget.domain.WidgetBars.parseSectionOrder(raw?.split(','))
+        }
+
+    fun setWidgetSectionOrder(order: List<com.usagewidget.domain.SoftwareSectionId>) {
+        val next = com.usagewidget.domain.WidgetBars.normalizeSectionOrder(order)
+        if (next == widgetSectionOrder && prefs.contains(KEY_WIDGET_SECTION_ORDER)) return
+        prefs.edit().putString(KEY_WIDGET_SECTION_ORDER, next.joinToString(",") { it.wireName }).apply()
+        publishDisplay()
+    }
+
+    fun moveWidgetSection(section: com.usagewidget.domain.SoftwareSectionId, delta: Int) {
+        val current = widgetSectionOrder
+        val next = com.usagewidget.domain.WidgetBars.moveSection(current, section, delta)
+        if (next == current) return
+        prefs.edit().putString(KEY_WIDGET_SECTION_ORDER, next.joinToString(",") { it.wireName }).apply()
+        publishDisplay()
+    }
+
     fun wantsNotificationPermission(): Boolean =
         failureNotificationsEnabled || notifyUsageRestored || notifyPacingReminders ||
             notifyPacingMissed || quotaAlertsEnabled
@@ -286,6 +307,7 @@ class AppSettings private constructor(context: Context) {
         showCursorOnDemand = showCursorOnDemand,
         showGrokOnDemand = showGrokOnDemand,
         hiddenWidgetBars = hiddenWidgetBars,
+        widgetSectionOrder = widgetSectionOrder,
         onlyUsageRemaining = onlyUsageRemaining
     )
 
@@ -321,6 +343,7 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_QUOTA_CODEX_FIVE = "quota_codex_five_hour_enabled"
         private const val KEY_QUOTA_CODEX_WEEKLY = "quota_codex_weekly_enabled"
         private const val KEY_HIDDEN_WIDGET_BARS = "hidden_widget_bars"
+        private const val KEY_WIDGET_SECTION_ORDER = "widget_section_order"
         private const val KEY_ONLY_USAGE_REMAINING = "only_usage_remaining"
         private const val KEY_QUOTA_CLAUDE_FIVE = "quota_claude_five_hour_enabled"
         private const val KEY_QUOTA_CLAUDE_WEEKLY = "quota_claude_weekly_enabled"

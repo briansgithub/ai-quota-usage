@@ -134,7 +134,8 @@ private fun WidgetContent(
                 showCursor = settings.showCursorOnDemand,
                 showGrok = settings.showGrokOnDemand
             ),
-            settings.hiddenWidgetBars
+            settings.hiddenWidgetBars,
+            settings.widgetSectionOrder
         ),
         enabled = settings.onlyUsageRemaining,
         dropSpentCards = true

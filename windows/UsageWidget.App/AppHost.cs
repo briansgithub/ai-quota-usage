@@ -400,7 +400,7 @@ internal sealed class AppHost : IDisposable
                 _hoverY = y;
                 _haveHoverPoint = true;
             }
-            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars);
+            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars, Settings.WidgetSectionOrder);
             var wasHidden = !_glance!.IsVisible;
             if (!SameGlance(_shownGlance, model))
             {

@@ -124,6 +124,7 @@ fun DashboardScreen(
             onGrok = viewModel::setShowGrokOnDemand,
             onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
             onWidgetBar = viewModel::setWidgetBarVisible,
+            onMoveWidgetSection = viewModel::moveWidgetSection,
             onDismiss = { settingsOpen = false }
         )
     }
@@ -177,6 +178,7 @@ private fun OnDemandSettingsDialog(
     onGrok: (Boolean) -> Unit,
     onOnlyUsageRemaining: (Boolean) -> Unit,
     onWidgetBar: (String, Boolean) -> Unit,
+    onMoveWidgetSection: (SoftwareSectionId, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     // Wider than the platform default so each service's bars fit on one row.
@@ -197,6 +199,7 @@ private fun OnDemandSettingsDialog(
                     onShowGrokOnDemand = onGrok,
                     onOnlyUsageRemaining = onOnlyUsageRemaining,
                     onWidgetBar = onWidgetBar,
+                    onMoveWidgetSection = onMoveWidgetSection,
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())

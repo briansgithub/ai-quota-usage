@@ -79,6 +79,25 @@ public sealed class AppSettings
         Set(s => s with { HiddenWidgetBars = set.OrderBy(x => x, StringComparer.Ordinal).ToList() });
     }
 
+    /// <summary>Software order on the mini panel and tray popup (see <see cref="WidgetBars"/>).</summary>
+    public IReadOnlyList<SoftwareSectionId> WidgetSectionOrder =>
+        WidgetBars.ParseSectionOrder(_state.WidgetSectionOrder);
+
+    public void SetWidgetSectionOrder(IEnumerable<SoftwareSectionId> order)
+    {
+        var next = WidgetBars.NormalizeSectionOrder(order);
+        if (_state.WidgetSectionOrder is not null && WidgetSectionOrder.SequenceEqual(next)) return;
+        Set(s => s with { WidgetSectionOrder = next.Select(x => x.Wire()).ToList() });
+    }
+
+    public void MoveWidgetSection(SoftwareSectionId section, int delta)
+    {
+        var current = WidgetSectionOrder;
+        var next = WidgetBars.MoveSection(current, section, delta);
+        if (current.SequenceEqual(next)) return;
+        Set(s => s with { WidgetSectionOrder = next.Select(x => x.Wire()).ToList() });
+    }
+
     public AlertPreferences AlertPreferencesValue() => new(
         PercentPerFiveHourWindow,
         FailureNotificationsEnabled,
@@ -178,7 +197,8 @@ public sealed record SettingsState(
     bool ShowCursorOnDemand = true,
     bool ShowGrokOnDemand = true,
     List<string>? HiddenWidgetBars = null,
-    bool QuotaGeminiEnabled = false);
+    bool QuotaGeminiEnabled = false,
+    List<string>? WidgetSectionOrder = null);
 
 public interface ISettingsStore
 {

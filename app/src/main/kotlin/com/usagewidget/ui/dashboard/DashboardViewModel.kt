@@ -117,6 +117,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         pushWidget()
     }
 
+    fun moveWidgetSection(section: com.usagewidget.domain.SoftwareSectionId, delta: Int) {
+        repo.settings().moveWidgetSection(section, delta)
+        pushWidget()
+    }
+
     fun setOnlyUsageRemaining(enabled: Boolean) {
         repo.settings().onlyUsageRemaining = enabled
         pushWidget()
