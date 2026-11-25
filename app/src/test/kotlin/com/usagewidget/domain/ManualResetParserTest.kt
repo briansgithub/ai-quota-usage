@@ -35,7 +35,7 @@ class ManualResetParserTest {
     }
 
     @Test
-    fun detailsEndpointAddsExpiryDdMm() {
+    fun detailsEndpointAddsExpiryMmDd() {
         val usageJson = """
             {
               "rate_limit": {
@@ -64,7 +64,7 @@ class ManualResetParserTest {
             now
         )
         val line = usage.manualResets!!.displayLine()!!
-        assertEquals("Manual resets: 1 (exp 12/11)", line)
+        assertEquals("Manual resets: 1 (exp 11/12)", line)
         assertFalse(usage.observedJson!!.contains("RateLimitResetCredit_SECRET"))
         assertTrue(usage.observedJson!!.contains("expires_at"))
         assertTrue(usage.observedJson!!.contains("codex_rate_limits"))
@@ -83,7 +83,7 @@ class ManualResetParserTest {
     fun htmlFallbackReadsUsageLimitResets() {
         val usage = OpenAiHtmlExtractor.extract(loadFixture("openai-usage-page.txt"), now)
         assertEquals(1, usage.manualResets!!.availableCount)
-        assertEquals("Manual resets: 1 (exp 06/11)", usage.manualResets!!.displayLine())
+        assertEquals("Manual resets: 1 (exp 11/06)", usage.manualResets!!.displayLine())
     }
 
     @Test
@@ -95,6 +95,21 @@ class ManualResetParserTest {
                 ManualResetCredit(expiresAtEpochMs = Instant.parse("2026-12-18T17:00:00Z").toEpochMilli(), status = "available")
             )
         )
-        assertEquals("Manual resets: 2 (exp 12/11, 18/12)", resets.displayLine())
+        assertEquals("Manual resets: 2 (exp 11/12, 12/18)", resets.displayLine())
+    }
+
+    @Test
+    fun expiryDateIsMonthSlashDayNotDayFirst() {
+        // Day > 12: 2026-11-25 must read 11/25, never 25/11 (a non-month).
+        fun line(iso: String) = ManualResets(
+            1,
+            listOf(ManualResetCredit(Instant.parse(iso).toEpochMilli(), "available"))
+        ).displayLine()
+        assertEquals("Manual resets: 1 (exp 11/25)", line("2026-11-25T17:00:00Z"))
+        // Day <= 12: 4 March must read 03/04, and 3 April 04/03 (no flip).
+        assertEquals("Manual resets: 1 (exp 03/04)", line("2026-03-04T17:00:00Z"))
+        assertEquals("Manual resets: 1 (exp 04/03)", line("2026-04-03T17:00:00Z"))
+        // New York calendar date, not UTC: 03:00Z on Dec 11 is still Dec 10 in NY.
+        assertEquals("Manual resets: 1 (exp 12/10)", line("2026-12-11T03:00:00Z"))
     }
 }

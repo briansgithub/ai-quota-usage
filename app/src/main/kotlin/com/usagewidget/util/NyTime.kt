@@ -34,8 +34,8 @@ object NyTime {
         DateTimeFormatter.ofPattern("h a", Locale.US)
     private val clockHourMinute: DateTimeFormatter =
         DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-    private val dayMonth: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("dd/MM", Locale.US)
+    private val monthDay: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("MM/dd", Locale.US)
 
     fun formatAbsolute(epochMs: Long): String {
         val zoned = Instant.ofEpochMilli(epochMs).atZone(zone)
@@ -150,8 +150,8 @@ object NyTime {
         }
     }
 
-    fun formatDayMonth(epochMs: Long): String {
-        return Instant.ofEpochMilli(epochMs).atZone(zone).format(dayMonth)
+    fun formatMonthDay(epochMs: Long): String {
+        return Instant.ofEpochMilli(epochMs).atZone(zone).format(monthDay)
     }
 
     fun countdown(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {

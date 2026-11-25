@@ -76,7 +76,7 @@ public class NyTimeTest
         Assert.Equal("Reset: Wed 3 PM (6d 4h)", NyTime.FormatResetLine(wedThreePm, Now));
         var thuTwoThirty = DateTimeOffset.Parse("2026-11-05T19:30:26Z").ToUnixTimeMilliseconds();
         Assert.Equal("Reset: Thu 2:30 PM (4h)", NyTime.FormatResetLine(thuTwoThirty, Now));
-        Assert.Equal("06/11", NyTime.FormatDayMonth(DateTimeOffset.Parse("2026-11-06T21:36:00Z").ToUnixTimeMilliseconds()));
+        Assert.Equal("11/06", NyTime.FormatMonthDay(DateTimeOffset.Parse("2026-11-06T21:36:00Z").ToUnixTimeMilliseconds()));
     }
 
     [Fact]

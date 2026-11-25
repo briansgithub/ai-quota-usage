@@ -117,8 +117,8 @@ public static class NyTime
         return $"{minutes}m";
     }
 
-    public static string FormatDayMonth(long epochMs) =>
-        AtZone(epochMs).ToString("dd/MM", CultureInfo.InvariantCulture);
+    public static string FormatMonthDay(long epochMs) =>
+        AtZone(epochMs).ToString("MM/dd", CultureInfo.InvariantCulture);
 
     public static string Countdown(long epochMs, long nowMs)
     {
