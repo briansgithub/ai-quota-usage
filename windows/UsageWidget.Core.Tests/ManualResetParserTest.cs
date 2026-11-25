@@ -30,7 +30,7 @@ public class ManualResetParserTest
     }
 
     [Fact]
-    public void DetailsEndpointAddsExpiryDdMm()
+    public void DetailsEndpointAddsExpiryMmDd()
     {
         var usageJson = """
             {
@@ -55,7 +55,7 @@ public class ManualResetParserTest
             }
             """;
         var usage = OpenAiUsageParser.MergeResetDetails(OpenAiUsageParser.ParseWhamUsage(usageJson, Now), details, Now);
-        Assert.Equal("Manual resets: 1 (exp 12/11)", usage.ManualResets!.DisplayLine());
+        Assert.Equal("Manual resets: 1 (exp 11/12)", usage.ManualResets!.DisplayLine());
         Assert.DoesNotContain("RateLimitResetCredit_SECRET", usage.ObservedJson!);
         Assert.Contains("expires_at", usage.ObservedJson!);
         Assert.Contains("codex_rate_limits", usage.ObservedJson!);
@@ -76,7 +76,7 @@ public class ManualResetParserTest
     {
         var usage = OpenAiHtmlExtractor.Extract(Fixture.Load("openai-usage-page.txt"), Now);
         Assert.Equal(1, usage.ManualResets!.AvailableCount);
-        Assert.Equal("Manual resets: 1 (exp 06/11)", usage.ManualResets.DisplayLine());
+        Assert.Equal("Manual resets: 1 (exp 11/06)", usage.ManualResets.DisplayLine());
     }
 
     [Fact]
@@ -87,6 +87,22 @@ public class ManualResetParserTest
             new ManualResetCredit(DateTimeOffset.Parse("2026-11-12T17:00:00Z").ToUnixTimeMilliseconds(), "available"),
             new ManualResetCredit(DateTimeOffset.Parse("2026-12-18T17:00:00Z").ToUnixTimeMilliseconds(), "available")
         });
-        Assert.Equal("Manual resets: 2 (exp 12/11, 18/12)", resets.DisplayLine());
+        Assert.Equal("Manual resets: 2 (exp 11/12, 12/18)", resets.DisplayLine());
+    }
+
+    [Fact]
+    public void ExpiryDateIsMonthSlashDayNotDayFirst()
+    {
+        static string? Line(string iso) => new ManualResets(1, new[]
+        {
+            new ManualResetCredit(DateTimeOffset.Parse(iso).ToUnixTimeMilliseconds(), "available")
+        }).DisplayLine();
+        // Day > 12: 2026-11-25 must read 11/25, never 25/11 (a non-month).
+        Assert.Equal("Manual resets: 1 (exp 11/25)", Line("2026-11-25T17:00:00Z"));
+        // Day <= 12: 4 March must read 03/04, and 3 April 04/03 (no flip).
+        Assert.Equal("Manual resets: 1 (exp 03/04)", Line("2026-03-04T17:00:00Z"));
+        Assert.Equal("Manual resets: 1 (exp 04/03)", Line("2026-04-03T17:00:00Z"));
+        // New York calendar date, not UTC: 03:00Z on Dec 11 is still Dec 10 in NY.
+        Assert.Equal("Manual resets: 1 (exp 12/10)", Line("2026-12-11T03:00:00Z"));
     }
 }

@@ -145,7 +145,7 @@ public sealed record ManualResets(
             .Where(ms => ms.HasValue)
             .Select(ms => ms!.Value)
             .OrderBy(ms => ms)
-            .Select(NyTime.FormatDayMonth)
+            .Select(NyTime.FormatMonthDay)
             .ToList();
         return expiries.Count == 0
             ? $"Manual resets: {count}"

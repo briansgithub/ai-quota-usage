@@ -190,7 +190,7 @@ data class ManualResets(
             .sorted()
             .map { epoch ->
                 val zoned = java.time.Instant.ofEpochMilli(epoch).atZone(zone)
-                "%02d/%02d".format(zoned.dayOfMonth, zoned.monthValue)
+                "%02d/%02d".format(zoned.monthValue, zoned.dayOfMonth)
             }
         return if (expiries.isEmpty()) {
             "Manual resets: $count"

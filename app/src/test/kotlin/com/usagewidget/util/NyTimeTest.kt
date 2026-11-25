@@ -60,7 +60,7 @@ class NyTimeTest {
         assertEquals("Reset: Wed 3 PM (6d 4h)", NyTime.formatResetLine(wedThreePm, now))
         val thuTwoThirty = Instant.parse("2026-11-05T19:30:26Z").toEpochMilli()
         assertEquals("Reset: Thu 2:30 PM (4h)", NyTime.formatResetLine(thuTwoThirty, now))
-        assertEquals("06/11", NyTime.formatDayMonth(Instant.parse("2026-11-06T21:36:00Z").toEpochMilli()))
+        assertEquals("11/06", NyTime.formatMonthDay(Instant.parse("2026-11-06T21:36:00Z").toEpochMilli()))
     }
 
     @Test
