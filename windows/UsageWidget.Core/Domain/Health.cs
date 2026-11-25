@@ -107,7 +107,9 @@ public static class StalePolicy
         var lastSuccess = health.LastSuccessEpochMs;
         var failStale = hasLastGood && outcome.IsFailure();
         var ageStale = hasLastGood && health.SignedIn && lastSuccess > 0 && nowMs - lastSuccess >= StaleAgeMs;
-        var isStale = failStale || ageStale;
+        var resetPassedStale = hasLastGood && health.SignedIn && lastSuccess > 0 &&
+            health.LastGoodMeterList.Any(m => m.ResetsAtEpochMs is { } r && r > lastSuccess && r <= nowMs);
+        var isStale = failStale || ageStale || resetPassedStale;
         if (!isStale)
         {
             return StaleView.Fresh with
@@ -117,7 +119,7 @@ public static class StalePolicy
         }
         var reason = outcome.IsFailure()
             ? (string.IsNullOrWhiteSpace(health.ShortReason) ? outcome.ShortReason(health.HttpStatus) : health.ShortReason)
-            : "Refresh overdue";
+            : ageStale ? "Refresh overdue" : "Reset passed";
         var severity = outcome.IsFailure()
             ? (outcome.Severity() == StaleSeverity.None ? StaleSeverity.Amber : outcome.Severity())
             : StaleSeverity.Amber;

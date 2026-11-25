@@ -75,18 +75,35 @@ class GeminiLoginActivity : ComponentActivity() {
                 .appendQueryParameter("state", state).appendQueryParameter("code_challenge", challenge)
                 .appendQueryParameter("code_challenge_method", "S256").build()
             withContext(Dispatchers.Main) { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            server.accept().use { socket ->
-                socket.soTimeout = 5000
-                val line = socket.getInputStream().bufferedReader().readLine()?.takeIf { it.length < 16384 } ?: return@withContext false
-                val target = line.split(' ').getOrNull(1) ?: return@withContext false
-                val callback = Uri.parse("http://127.0.0.1$target")
-                val code = callback.getQueryParameter("code")
-                val valid = callback.path == "/oauth/callback" && callback.getQueryParameter("state") == state && !code.isNullOrBlank()
-                socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nReturn to Usage Widget.\r\n".toByteArray())
-                if (!valid) return@withContext false
-                GeminiOAuth.exchange(SecureCookieStore.get(this@GeminiLoginActivity), mapOf(
-                    "grant_type" to "authorization_code", "code" to code!!, "redirect_uri" to redirect, "code_verifier" to verifier))
+            val deadline = System.currentTimeMillis() + 180_000L
+            while (System.currentTimeMillis() < deadline) {
+                val remaining = (deadline - System.currentTimeMillis()).coerceAtLeast(1_000L).toInt()
+                server.soTimeout = remaining
+                server.accept().use { socket ->
+                    socket.soTimeout = 5000
+                    val line = runCatching { socket.getInputStream().bufferedReader().readLine() }.getOrNull()
+                        ?.takeIf { it.length < 16384 } ?: return@use
+                    val target = line.split(' ').getOrNull(1) ?: return@use
+                    val callback = Uri.parse("http://127.0.0.1$target")
+                    if (callback.path != "/oauth/callback") {
+                        runCatching {
+                            socket.getOutputStream().write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".toByteArray())
+                            socket.getOutputStream().flush()
+                        }
+                        return@use
+                    }
+                    val code = callback.getQueryParameter("code")
+                    val valid = callback.getQueryParameter("state") == state && !code.isNullOrBlank()
+                    runCatching {
+                        socket.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nReturn to Usage Widget.\r\n".toByteArray())
+                        socket.getOutputStream().flush()
+                    }
+                    if (!valid) return@withContext false
+                    return@withContext GeminiOAuth.exchange(SecureCookieStore.get(this@GeminiLoginActivity), mapOf(
+                        "grant_type" to "authorization_code", "code" to code!!, "redirect_uri" to redirect, "code_verifier" to verifier))
+                }
             }
+            false
         }
     }
 

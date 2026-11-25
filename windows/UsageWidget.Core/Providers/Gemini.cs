@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace UsageWidget;
@@ -48,20 +50,31 @@ public static class GeminiUsageParser
                         _ => argon && buckets.Count == 1 && bucket.Str("window") == "weekly" ? "Gemini 4 Argon weekly" : null
                     };
                     if (label is null) continue;
-                    var meter = Meter(bucket, label == "Gemini 4 Argon weekly" ? "gemini.argon-weekly" : "gemini." + id, label, id.EndsWith("5h", StringComparison.Ordinal) ? FiveHours : Week);
+                    var duration = label == "Gemini 4 Argon weekly" ? Week : id.EndsWith("5h", StringComparison.Ordinal) ? FiveHours : Week;
+                    var meter = Meter(bucket, label == "Gemini 4 Argon weekly" ? "gemini.argon-weekly" : "gemini." + id, label, duration);
                     if (meter is not null) meters.Add(id, meter);
                 }
             }
         }
-        return meters.Values.OrderBy(m => m.Id == "gemini.gemini-5h" ? 0 : m.Id == "gemini.gemini-weekly" ? 1 : m.Title.Contains("Argon") ? 2 : 3).ToList();
+        return meters.Values.OrderBy(m => m.Id switch
+        {
+            "gemini.gemini-5h" => 0,
+            "gemini.gemini-weekly" => 1,
+            "gemini.argon-weekly" => 2,
+            "gemini.3p-5h" => 3,
+            "gemini.3p-weekly" => 4,
+            _ => m.Title.Contains("Argon") ? 2 : 5
+        }).ToList();
     }
 
     private static UsageMeter? Meter(JsonObject obj, string id, string title, long duration)
     {
         if (obj.ContainsKey("disabled") && (obj["disabled"] is not JsonValue d || !d.TryGetValue<bool>(out var disabled) || disabled)) return null;
         if (obj["remainingFraction"] is not JsonValue v || !v.TryGetValue<double>(out var fraction) || !double.IsFinite(fraction) || fraction < 0 || fraction > 1) return null;
-        long? reset = DateTimeOffset.TryParse(obj.Str("resetTime"), out var at) ? at.ToUnixTimeMilliseconds() : null;
-        if (obj.ContainsKey("resetTime") && reset is null) return null;
+        var hasNonNullReset = obj.TryGetPropertyValue("resetTime", out var resetNode) && resetNode is not null && resetNode.GetValueKind() != JsonValueKind.Null;
+        long? reset = DateTimeOffset.TryParse(obj.Str("resetTime"), CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at) ? at.ToUnixTimeMilliseconds() : null;
+        if (hasNonNullReset && reset is null) return null;
         return new UsageMeter(id, title, UsedPercent: (1 - fraction) * 100, RemainingPercent: fraction * 100,
             ResetsAtEpochMs: reset, WindowStartEpochMs: reset - duration, WindowLengthMs: duration);
     }
@@ -78,7 +91,7 @@ public static class GeminiUsageParser
             if (internalId is "MODEL_CHAT_20706" or "MODEL_CHAT_23310" or "MODEL_GOOGLE_GEMINI_2_5_FLASH" or "MODEL_GOOGLE_GEMINI_2_5_FLASH_THINKING" or "MODEL_GOOGLE_GEMINI_2_5_FLASH_LITE" or "MODEL_GOOGLE_GEMINI_2_5_PRO" or "MODEL_PLACEHOLDER_M19" or "MODEL_PLACEHOLDER_M9" or "MODEL_PLACEHOLDER_M12" or "MODEL_PLACEHOLDER_M421") return false;
             return (id.StartsWith("gemini-") || name?.StartsWith("Gemini", StringComparison.OrdinalIgnoreCase) == true) && !new[] { "image", "argon", "2.5", "placeholder", "internal" }.Any(id.Contains)
                 && !string.IsNullOrWhiteSpace(name) && !name.Contains("image", StringComparison.OrdinalIgnoreCase) && !name.Contains("Argon", StringComparison.OrdinalIgnoreCase)
-                && obj?["isInternal"]?.ToString() != "true";
+                && obj?.Bool("isInternal") != true;
         }).Select(kv => kv.Value is JsonObject obj && obj["quotaInfo"] is JsonObject quota
             ? Meter(quota, "gemini.gemini-5h", "Gemini 5-hour", FiveHours) : null)
             .Where(m => m is not null).OrderByDescending(m => m!.UsedPercent).FirstOrDefault();

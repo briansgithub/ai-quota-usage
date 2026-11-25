@@ -68,4 +68,37 @@ class RefreshScheduleTest {
         assertEquals(300L, RefreshSchedule.lastSuccessEpochMs(snapshot))
         assertEquals(0L, RefreshSchedule.lastSuccessEpochMs(UsageSnapshot(fetchedAtEpochMs = 9L)))
     }
+
+    @Test
+    fun wakeRefreshesAfterPassedResetOrStaleSectionEvenWithinFiveMinutes() {
+        val now = 10_000_000L
+        val recent = now - 60_000L
+        val fresh = UsageSnapshot(
+            fetchedAtEpochMs = recent,
+            sectionHealth = listOf(
+                SectionHealth(
+                    sectionId = "codex",
+                    lastSuccessEpochMs = recent,
+                    lastOutcome = FetchOutcome.SUCCESS.name,
+                    lastGoodMeters = listOf(
+                        UsageMeter("openai.five_hour", "5-hour", usedPercent = 50.0, remainingPercent = 50.0, resetsAtEpochMs = now + 60_000L)
+                    ),
+                    signedIn = true
+                )
+            )
+        )
+        assertEquals(false, RefreshSchedule.shouldRefreshOnWake(fresh, 0L, now))
+
+        val passedReset = fresh.copy(
+            sectionHealth = listOf(
+                fresh.sectionHealth.single().copy(
+                    lastGoodMeters = listOf(
+                        UsageMeter("openai.five_hour", "5-hour", usedPercent = 100.0, remainingPercent = 0.0, resetsAtEpochMs = now - 5_000L)
+                    )
+                )
+            )
+        )
+        assertEquals(true, RefreshSchedule.shouldRefreshOnWake(passedReset, 0L, now))
+        assertEquals(false, RefreshSchedule.shouldRefreshOnWake(passedReset, now - 10_000L, now))
+    }
 }

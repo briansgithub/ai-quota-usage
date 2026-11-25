@@ -109,6 +109,36 @@ class StalePolicyTest {
         assertFalse(view.isStale)
     }
 
+    @Test
+    fun resetPassedSinceLastSuccessMarksAmberStaleUntilRefreshed() {
+        val lastSuccess = now - 10 * 60_000L
+        val resetAt = now - 60_000L
+        val preRefresh = SectionHealth(
+            sectionId = "codex",
+            lastAttemptEpochMs = lastSuccess,
+            lastSuccessEpochMs = lastSuccess,
+            lastOutcome = FetchOutcome.SUCCESS.name,
+            lastGoodMeters = listOf(
+                UsageMeter("openai.five_hour", "5-hour", usedPercent = 100.0, remainingPercent = 0.0, resetsAtEpochMs = resetAt)
+            ),
+            signedIn = true
+        )
+        val stale = StalePolicy.evaluate(preRefresh, now)
+        assertTrue(stale.isStale)
+        assertEquals(StaleSeverity.AMBER, stale.severity)
+        assertEquals("Reset passed", stale.shortReason)
+        assertFalse(stale.shouldNotify)
+
+        val postRefresh = preRefresh.copy(
+            lastAttemptEpochMs = now,
+            lastSuccessEpochMs = now,
+            lastGoodMeters = listOf(
+                UsageMeter("openai.five_hour", "5-hour", usedPercent = 0.0, remainingPercent = 100.0, resetsAtEpochMs = now + PacingPolicy.WINDOW_MS)
+            )
+        )
+        assertFalse(StalePolicy.evaluate(postRefresh, now).isStale)
+    }
+
     private fun healthy(
         lastSuccess: Long,
         outcome: FetchOutcome,

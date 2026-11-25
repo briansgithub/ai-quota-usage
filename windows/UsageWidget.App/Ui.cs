@@ -107,9 +107,9 @@ internal static class Ui
         return box;
     }
 
-    public static FrameworkElement UsageBar(int usedPercent, double height = 8, double? expectedUsedPercent = null, bool capBar = false)
+    public static FrameworkElement UsageBar(double usedPercent, double height = 8, double? expectedUsedPercent = null, bool capBar = false)
     {
-        var clamped = Math.Clamp(usedPercent, 0, 100);
+        var clamped = Math.Clamp(usedPercent, 0.0, 100.0);
         var fill = new Rectangle
         {
             Fill = capBar ? Theme.CapFill(clamped) : Theme.PaceFill(clamped, expectedUsedPercent),
@@ -120,7 +120,8 @@ internal static class Ui
             RadiusY = Math.Max(1, height / 2),
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Width = 1
+            Width = 0,
+            Visibility = clamped > 0 ? Visibility.Visible : Visibility.Collapsed
         };
         var track = new Grid { Height = height };
         track.Children.Add(new Border { Background = Theme.TrackBrush, CornerRadius = new CornerRadius(Math.Max(1, height / 2)) });
@@ -144,7 +145,7 @@ internal static class Ui
         track.SizeChanged += (_, _) =>
         {
             var w = track.ActualWidth;
-            fill.Width = Math.Max(0, w * clamped / 100.0);
+            fill.Width = clamped > 0 ? Math.Max(0, w * clamped / 100.0) : 0;
             if (tick is not null && expectedUsedPercent is { } expected)
             {
                 var x = w * Math.Clamp(expected, 0, 100) / 100.0;
@@ -191,7 +192,7 @@ internal static class Ui
         col.Children.Add(row);
         if (meter.HasUsageBar)
             col.Children.Add(UsageBar(
-                meter.DisplayUsedPercent ?? 0,
+                meter.UsedPercent ?? meter.DisplayUsedPercent ?? 0.0,
                 expectedUsedPercent: meter.IsCapBar ? null : PaceWindows.ExpectedUsedPercent(meter, nowMs),
                 capBar: meter.IsCapBar));
         if (resetSegments is not null && (used is not null || !meter.HasUsageBar))

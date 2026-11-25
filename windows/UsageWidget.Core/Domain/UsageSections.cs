@@ -58,14 +58,28 @@ public static class UsageSections
             GrokSection(cursor, hydrated.Health(SoftwareSectionId.GrokBot), nowMs),
             CodexSection(openai, hydrated.Health(SoftwareSectionId.Codex), nowMs),
             ClaudeSection(claude, hydrated.Health(SoftwareSectionId.Claude), nowMs),
-            new SoftwareSection(SoftwareSectionId.Gemini, ProviderId.Gemini,
-                hydrated.Provider(ProviderId.Gemini)?.ProviderStatus ?? ProviderStatus.Unsigned,
-                Subtitle: hydrated.Provider(ProviderId.Gemini)?.PlanLabel,
-                Error: hydrated.Provider(ProviderId.Gemini)?.Error,
-                Meters: hydrated.Provider(ProviderId.Gemini)?.MeterList,
-                Health: hydrated.Health(SoftwareSectionId.Gemini),
-                Stale: hydrated.Health(SoftwareSectionId.Gemini).StaleView(nowMs))
+            GeminiSection(hydrated.Provider(ProviderId.Gemini), hydrated.Health(SoftwareSectionId.Gemini), nowMs)
         };
+    }
+
+    private static SoftwareSection GeminiSection(ProviderSnapshot? gemini, SectionHealth health, long nowMs)
+    {
+        var status = gemini?.ProviderStatus ?? ProviderStatus.Unsigned;
+        var sourceMeters = (gemini?.MeterList.Count > 0
+            ? gemini.MeterList
+            : health.OutcomeEnum == FetchOutcome.Success
+                ? Array.Empty<UsageMeter>()
+                : health.LastGoodMeterList).ToList();
+        var stale = health.StaleView(nowMs);
+        return new SoftwareSection(
+            SoftwareSectionId.Gemini,
+            ProviderId.Gemini,
+            status,
+            gemini?.PlanLabel ?? health.LastGoodPlanLabel,
+            stale.ShortReason ?? gemini?.Error,
+            sourceMeters,
+            health,
+            stale);
     }
 
     private static SoftwareSection CursorSection(ProviderSnapshot? cursor, SectionHealth health, long nowMs)

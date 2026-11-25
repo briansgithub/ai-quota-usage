@@ -91,9 +91,7 @@ object UsageAlertEngine {
         }
 
         val wakes = mutableListOf<ScheduledWake>()
-        if (prefs.notifyUsageRestored) {
-            wakes += resetWakes(current, nowMs)
-        }
+        wakes += resetWakes(current, nowMs)
         if (prefs.notifyPacingReminders || prefs.notifyPacingMissed) {
             wakes += pacingWakes(pacing, nowMs)
         }
@@ -231,7 +229,9 @@ object UsageAlertEngine {
 
     private fun resetWakes(current: UsageSnapshot, nowMs: Long): List<ScheduledWake> {
         return current.providers.flatMap { it.meters }.mapNotNull { meter ->
-            val group = ResetDetector.notifyGroup(meter.id) ?: return@mapNotNull null
+            val group = ResetDetector.notifyGroup(meter.id)
+                ?: meter.id.takeIf { it.startsWith("gemini.") }
+                ?: return@mapNotNull null
             val resetAt = meter.resetsAtEpochMs ?: return@mapNotNull null
             val at = resetAt + RESET_WAKE_PADDING_MS
             if (at <= nowMs || at - nowMs > MAX_WAKE_AHEAD_MS) return@mapNotNull null

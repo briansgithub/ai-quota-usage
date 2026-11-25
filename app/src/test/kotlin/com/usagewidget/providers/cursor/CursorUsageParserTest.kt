@@ -334,4 +334,21 @@ class CursorUsageParserTest {
         val disabled = CursorHtmlExtractor.extract(loadFixture("cursor-spending-page.txt"), snapshotTime)
         assertNull(disabled.plan.onDemand)
     }
+
+    @Test
+    fun grokExplicitlyDisabledOnDemandDoesNotFallBackToPlanOnDemand() {
+        val plan = CursorUsageParser.parseUsageSummary(
+            """{"billingCycleEnd":"2026-11-11T00:00:00.000Z","individualUsage":{"plan":{"autoPercentUsed":17},"onDemand":{"enabled":true,"used":1234,"limit":5000}}}""",
+            snapshotTime
+        )
+        val grok = CursorUsageParser.parseSandUsage(
+            """{"usagePercent":10,"hasNonZeroIncludedLimit":true,"nextResetTimestampUtc":"2026-11-13T00:00:00.000Z","onDemandSettings":{"enabled":false,"used":2500,"limit":5000}}""",
+            snapshotTime
+        )
+        assertNull(grok.onDemand)
+        assertTrue(grok.onDemandDisabled)
+        val snapshot = CursorUsageParser.toSnapshot(plan, grok)
+        assertTrue(snapshot.meters.any { it.id == "cursor.on_demand" })
+        assertTrue(snapshot.meters.none { it.id == "cursor.grok_on_demand" })
+    }
 }

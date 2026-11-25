@@ -32,6 +32,7 @@ internal sealed class AppHost : IDisposable
     private int _hoverY;
     private long _nextRefreshAt;
     private bool _busy;
+    private bool _pendingWakeRefresh;
     private bool _miniInTray;
     private bool _dashboardInTray;
     public bool IsExiting { get; private set; }
@@ -71,11 +72,10 @@ internal sealed class AppHost : IDisposable
     {
         if (_busy || IsExiting) return;
         _busy = true;
+        var runPending = false;
         try
         {
             await _repo.RefreshAsync(allowHtmlFallback: true);
-            Settings.ArmNextRefreshFromNow(Now());
-            _nextRefreshAt = Settings.NextRefreshAtEpochMs;
         }
         catch (Exception ex)
         {
@@ -83,9 +83,15 @@ internal sealed class AppHost : IDisposable
         }
         finally
         {
+            Settings.ArmNextRefreshFromNow(Now());
+            _nextRefreshAt = Settings.NextRefreshAtEpochMs;
             _busy = false;
+            runPending = _pendingWakeRefresh && !IsExiting;
+            _pendingWakeRefresh = false;
             Render();
         }
+        if (runPending)
+            _ = RefreshNow();
     }
 
     public void OpenDashboard()
@@ -204,7 +210,7 @@ internal sealed class AppHost : IDisposable
         if (provider == ProviderId.Gemini)
         {
             _repo.ConnectGemini();
-            System.Windows.MessageBox.Show("Sign in using Antigravity on this PC, then refresh Usage Widget. Credentials are read from your .gemini folder; the source files are never changed.", "Gemini (Antigravity)");
+            System.Windows.MessageBox.Show("Sign in using Antigravity on this PC, then refresh Usage Widget. Credentials are read from Windows Credential Manager or your local Antigravity files; the source credentials are never changed.", "Gemini (Antigravity)");
             _ = RefreshNow();
             return;
         }
@@ -306,7 +312,11 @@ internal sealed class AppHost : IDisposable
         {
             due = _wakes.Where(w => w.AtEpochMs <= now && _firedWakes.Add(w.UniqueName)).ToList();
         }
-        if (due.Count > 0) _ = RefreshNow();
+        if (due.Count > 0)
+        {
+            if (_busy) _pendingWakeRefresh = true;
+            else _ = RefreshNow();
+        }
         ConsumeTestNotificationFlag();
         Render();
     }

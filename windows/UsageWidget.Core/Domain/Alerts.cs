@@ -224,7 +224,7 @@ public static class UsageAlertEngine
         IReadOnlyCollection<string> newSeen = quiet ? seenKeys.ToList() : NotificationDedupe.RememberAll(seenKeys, toPost.Select(a => a.DedupeKey));
 
         var wakes = new List<ScheduledWake>();
-        if (prefs.NotifyUsageRestored) wakes.AddRange(ResetWakes(current, nowMs));
+        wakes.AddRange(ResetWakes(current, nowMs));
         if (prefs.NotifyPacingReminders || prefs.NotifyPacingMissed) wakes.AddRange(PacingWakes(pacing, nowMs));
 
         return new UsageAlertPlan(toPost, wakes.DistinctBy(w => w.UniqueName).ToList(), newSeen);
@@ -321,7 +321,7 @@ public static class UsageAlertEngine
     {
         foreach (var meter in current.ProviderList.SelectMany(p => p.MeterList))
         {
-            var group = ResetDetector.NotifyGroup(meter.Id);
+            var group = ResetDetector.NotifyGroup(meter.Id) ?? (meter.Id.StartsWith("gemini.", StringComparison.Ordinal) ? meter.Id : null);
             if (group is null || meter.ResetsAtEpochMs is null) continue;
             var at = meter.ResetsAtEpochMs.Value + ResetWakePaddingMs;
             if (at <= nowMs || at - nowMs > MaxWakeAheadMs) continue;

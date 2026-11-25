@@ -130,13 +130,21 @@ object StalePolicy {
             health.signedIn &&
             lastSuccess > 0 &&
             nowMs - lastSuccess >= STALE_AGE_MS
-        val isStale = failStale || ageStale
+        val resetPassedStale = hasLastGood &&
+            health.signedIn &&
+            lastSuccess > 0 &&
+            health.lastGoodMeters.any { m ->
+                val r = m.resetsAtEpochMs
+                r != null && r > lastSuccess && r <= nowMs
+            }
+        val isStale = failStale || ageStale || resetPassedStale
         if (!isStale) return StaleView.fresh.copy(
             lastUpdatedLine = lastUpdatedLine(lastSuccess, nowMs).takeIf { lastSuccess > 0 }
         )
         val reason = when {
             outcome.isFailure -> health.shortReason?.takeIf { it.isNotBlank() } ?: outcome.shortReason(health.httpStatus)
-            else -> "Refresh overdue"
+            ageStale -> "Refresh overdue"
+            else -> "Reset passed"
         }
         val severity = when {
             outcome.isFailure -> outcome.severity().let {

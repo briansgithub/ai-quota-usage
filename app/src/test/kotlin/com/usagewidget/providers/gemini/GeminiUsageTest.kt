@@ -123,4 +123,116 @@ class GeminiUsageTest {
         assertEquals(SoftwareSectionId.GEMINI, next.alerts.single().section)
         assertTrue(QuotaThresholdEngine.evaluate(snapshot(18.0), now, prefs.copy(masterEnabled = false), first.states, false).alerts.isEmpty())
     }
+
+    @Test fun nullResetTimeAndOffsetTimestampParseWhileMalformedIsRejected() {
+        val json = """
+            {
+              "groups": [
+                {
+                  "displayName": "Gemini",
+                  "buckets": [
+                    { "bucketId": "gemini-5h", "remainingFraction": 1.0, "resetTime": null },
+                    { "bucketId": "gemini-weekly", "remainingFraction": 0.5, "resetTime": "2026-11-25T05:00:00+00:00" },
+                    { "bucketId": "3p-5h", "remainingFraction": 0.5, "resetTime": "not-a-timestamp" }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+        val meters = GeminiUsageParser.merge(json)
+        assertEquals(listOf("gemini.gemini-5h", "gemini.gemini-weekly"), meters.map { it.id })
+        assertNull(meters[0].resetsAtEpochMs)
+        assertNotNull(meters[1].resetsAtEpochMs)
+    }
+
+    @Test fun paceWindowsAndStaleGeminiSectionKeepLastGood() {
+        assertEquals(GeminiUsageParser.FIVE_HOURS, PaceWindows.knownLengthMs("gemini.gemini-5h"))
+        assertEquals(GeminiUsageParser.FIVE_HOURS, PaceWindows.knownLengthMs("gemini.3p-5h"))
+        assertEquals(GeminiUsageParser.WEEK, PaceWindows.knownLengthMs("gemini.gemini-weekly"))
+        assertEquals(GeminiUsageParser.WEEK, PaceWindows.knownLengthMs("gemini.3p-weekly"))
+        assertEquals(GeminiUsageParser.WEEK, PaceWindows.knownLengthMs("gemini.argon-weekly"))
+
+        val cached = listOf(UsageMeter("gemini.gemini-5h", "Gemini 5-hour", usedPercent = 30.0, remainingPercent = 70.0))
+        val snapshot = UsageSnapshot(
+            fetchedAtEpochMs = now,
+            providers = listOf(ProviderSnapshot("gemini", "Gemini", "ERROR")),
+            sectionHealth = listOf(
+                SectionHealth(
+                    sectionId = "gemini",
+                    lastAttemptEpochMs = now,
+                    lastSuccessEpochMs = now - 60_000,
+                    lastOutcome = FetchOutcome.NETWORK.name,
+                    shortReason = "Network error",
+                    lastGoodMeters = cached,
+                    lastGoodPlanLabel = "Ultra",
+                    signedIn = true
+                )
+            )
+        )
+        val gemini = UsageSections.from(snapshot, now).single { it.id == SoftwareSectionId.GEMINI }
+        assertEquals(1, gemini.meters.size)
+        assertEquals("Ultra", gemini.subtitle)
+        assertEquals("Network error", gemini.error)
+        assertTrue(gemini.stale.isStale)
+    }
+
+    @Test fun geminiAuthDistinguishesTransientFailureFromAuthExpired() {
+        var stored: String? = """{"access_token":"synthetic-old","refresh_token":"synthetic-refresh","expiry_date":1}"""
+        val transient = GeminiOAuth.fetchWith(
+            readTokens = { stored },
+            saveTokens = { stored = it },
+            now = now,
+            refreshToken = { GeminiOAuth.RefreshResult(GeminiOAuth.RefreshStatus.TRANSIENT_FAILURE, FetchOutcome.TIMEOUT) },
+            quotaPost = { _, _, _, _, _ -> error("unreachable") }
+        )
+        assertTrue(transient is ProviderResult.Failure)
+        assertEquals(FetchOutcome.TIMEOUT, (transient as ProviderResult.Failure).attempts.single().outcomeEnum)
+
+        val revoked = GeminiOAuth.fetchWith(
+            readTokens = { stored },
+            saveTokens = { stored = it },
+            now = now,
+            refreshToken = { GeminiOAuth.RefreshResult(GeminiOAuth.RefreshStatus.AUTH_REJECTED, FetchOutcome.AUTH_EXPIRED) },
+            quotaPost = { _, _, _, _, _ -> error("unreachable") }
+        )
+        assertTrue(revoked is ProviderResult.NeedsSignIn)
+        assertEquals(FetchOutcome.AUTH_EXPIRED, (revoked as ProviderResult.NeedsSignIn).attempts.single().outcomeEnum)
+
+        stored = """{"access_token":"synthetic-rejected","refresh_token":"synthetic-revoked","expiry_date":${now + 3600_000}}"""
+        val api401 = GeminiOAuth.fetchWith(
+            readTokens = { stored },
+            saveTokens = { stored = it },
+            now = now,
+            refreshToken = { GeminiOAuth.RefreshResult(GeminiOAuth.RefreshStatus.AUTH_REJECTED, FetchOutcome.AUTH_EXPIRED) },
+            quotaPost = { _, _, _, _, _ -> GeminiResponse(401, f("failure")) }
+        )
+        assertTrue(api401 is ProviderResult.NeedsSignIn)
+        assertEquals(FetchOutcome.AUTH_EXPIRED, (api401 as ProviderResult.NeedsSignIn).attempts.single().outcomeEnum)
+    }
+
+    @Test
+    fun ordersFiveHourBeforeWeeklyForThirdPartyPools() {
+        val json = """
+            {
+              "groups": [
+                {
+                  "displayName": "Third-party",
+                  "buckets": [
+                    { "bucketId": "3p-weekly", "remainingFraction": 1.0 },
+                    { "bucketId": "3p-5h", "remainingFraction": 1.0 }
+                  ]
+                },
+                {
+                  "displayName": "Gemini",
+                  "buckets": [
+                    { "bucketId": "gemini-weekly", "remainingFraction": 0.9 },
+                    { "bucketId": "gemini-5h", "remainingFraction": 0.6 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+        val ids = GeminiUsageParser.merge(json).map { it.id }
+        assertEquals(listOf("gemini.gemini-5h", "gemini.gemini-weekly", "gemini.3p-5h", "gemini.3p-weekly"), ids)
+    }
 }

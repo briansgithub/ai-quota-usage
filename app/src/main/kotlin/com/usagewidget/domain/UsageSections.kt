@@ -64,13 +64,29 @@ object UsageSections {
             grokSection(cursor, hydrated.health(SoftwareSectionId.GROK_BOT), nowMs),
             codexSection(openai, hydrated.health(SoftwareSectionId.CODEX), nowMs),
             claudeSection(claude, hydrated.health(SoftwareSectionId.CLAUDE), nowMs),
-            SoftwareSection(SoftwareSectionId.GEMINI, ProviderId.GEMINI,
-                hydrated.provider(ProviderId.GEMINI)?.providerStatus ?: ProviderStatus.UNSIGNED,
-                subtitle = hydrated.provider(ProviderId.GEMINI)?.planLabel,
-                error = hydrated.provider(ProviderId.GEMINI)?.error,
-                meters = hydrated.provider(ProviderId.GEMINI)?.meters.orEmpty(),
-                health = hydrated.health(SoftwareSectionId.GEMINI),
-                stale = hydrated.health(SoftwareSectionId.GEMINI).staleView(nowMs))
+            geminiSection(hydrated.provider(ProviderId.GEMINI), hydrated.health(SoftwareSectionId.GEMINI), nowMs)
+        )
+    }
+
+    private fun geminiSection(
+        gemini: ProviderSnapshot?,
+        health: SectionHealth,
+        nowMs: Long
+    ): SoftwareSection {
+        val status = gemini?.providerStatus ?: ProviderStatus.UNSIGNED
+        val sourceMeters = gemini?.meters.orEmpty().ifEmpty {
+            if (health.outcomeEnum == FetchOutcome.SUCCESS) emptyList() else health.lastGoodMeters
+        }
+        val stale = health.staleView(nowMs)
+        return SoftwareSection(
+            id = SoftwareSectionId.GEMINI,
+            signInProvider = ProviderId.GEMINI,
+            status = status,
+            subtitle = gemini?.planLabel ?: health.lastGoodPlanLabel,
+            error = stale.shortReason ?: gemini?.error,
+            meters = sourceMeters,
+            health = health,
+            stale = stale
         )
     }
 

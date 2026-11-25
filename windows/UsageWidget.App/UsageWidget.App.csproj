@@ -14,8 +14,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.6.0</Version>
-    <InformationalVersion>1.6.0-windows</InformationalVersion>
+    <Version>1.6.1</Version>
+    <InformationalVersion>1.6.1-windows</InformationalVersion>
     <Product>Usage Widget</Product>
     <Company>Usage Widget</Company>
     <Description>Cursor, Grok Bot, and Codex usage for Windows</Description>

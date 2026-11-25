@@ -4,6 +4,7 @@ import com.usagewidget.domain.ProviderSnapshot
 import com.usagewidget.domain.UsageMeter
 import kotlinx.serialization.json.*
 import java.time.Instant
+import java.time.OffsetDateTime
 
 object GeminiUsageParser {
     const val FIVE_HOURS = 18_000_000L
@@ -46,19 +47,35 @@ object GeminiUsageParser {
                         "3p-weekly" -> "Third-party (Claude/GPT) weekly"
                         else -> if (argon && buckets.size == 1 && text(bucket, "window") == "weekly") "Gemini 4 Argon weekly" else null
                     } ?: continue
-                    meter(bucket, if (title == "Gemini 4 Argon weekly") "gemini.argon-weekly" else "gemini.$id", title, if (id.endsWith("5h")) FIVE_HOURS else WEEK)?.let { meters[id] = it }
+                    val duration = if (title == "Gemini 4 Argon weekly") WEEK else if (id.endsWith("5h")) FIVE_HOURS else WEEK
+                    meter(bucket, if (title == "Gemini 4 Argon weekly") "gemini.argon-weekly" else "gemini.$id", title, duration)?.let { meters[id] = it }
                 }
             }
         }
-        return meters.values.sortedBy { when { it.id == "gemini.gemini-5h" -> 0; it.id == "gemini.gemini-weekly" -> 1; it.title.contains("Argon") -> 2; else -> 3 } }
+        return meters.values.sortedBy {
+            when (it.id) {
+                "gemini.gemini-5h" -> 0
+                "gemini.gemini-weekly" -> 1
+                "gemini.argon-weekly" -> 2
+                "gemini.3p-5h" -> 3
+                "gemini.3p-weekly" -> 4
+                else -> if (it.title.contains("Argon")) 2 else 5
+            }
+        }
     }
 
     private fun meter(obj: JsonObject, id: String, title: String, duration: Long): UsageMeter? {
         if ("disabled" in obj && ((obj["disabled"] as? JsonPrimitive)?.let { !it.isString && it.booleanOrNull == false } != true)) return null
         val value = obj["remainingFraction"] as? JsonPrimitive ?: return null
         val fraction = value.doubleOrNull?.takeIf { !value.isString && it.isFinite() && it in 0.0..1.0 } ?: return null
-        val reset = runCatching { Instant.parse(text(obj, "resetTime")).toEpochMilli() }.getOrNull()
-        if ("resetTime" in obj && reset == null) return null
+        val resetNode = obj["resetTime"]
+        val hasNonNullReset = resetNode != null && resetNode !is JsonNull
+        val resetText = text(obj, "resetTime")
+        val reset = resetText?.let { raw ->
+            runCatching { OffsetDateTime.parse(raw).toInstant().toEpochMilli() }.getOrNull()
+                ?: runCatching { Instant.parse(raw).toEpochMilli() }.getOrNull()
+        }
+        if (hasNonNullReset && reset == null) return null
         return UsageMeter(id, title, usedPercent = (1 - fraction) * 100, remainingPercent = fraction * 100,
             resetsAtEpochMs = reset, windowStartEpochMs = reset?.minus(duration), windowLengthMs = duration)
     }

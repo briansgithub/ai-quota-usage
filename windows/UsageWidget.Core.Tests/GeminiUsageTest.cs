@@ -139,4 +139,79 @@ public class GeminiUsageTest
         Assert.Equal(6407, next.Alerts[0].NotificationId);
         Assert.Empty(QuotaThresholdEngine.Evaluate(Snapshot(18), Now, prefs with { MasterEnabled = false }, first.States, false).Alerts);
     }
+
+    [Fact]
+    public void NullResetTimeKeepsIdleBucketWhileMalformedResetIsDropped()
+    {
+        var json = """
+            {
+              "groups": [
+                {
+                  "displayName": "Gemini",
+                  "buckets": [
+                    { "bucketId": "gemini-5h", "remainingFraction": 1.0, "resetTime": null },
+                    { "bucketId": "gemini-weekly", "remainingFraction": 0.5, "resetTime": "not-a-timestamp" }
+                  ]
+                }
+              ]
+            }
+            """;
+        var meters = GeminiUsageParser.Merge(json);
+        Assert.Single(meters);
+        Assert.Equal("gemini.gemini-5h", meters[0].Id);
+        Assert.Equal(0, meters[0].DisplayUsedPercent);
+        Assert.Null(meters[0].ResetsAtEpochMs);
+    }
+
+    [Fact]
+    public void PaceWindowsAndStaleGeminiSectionKeepLastGood()
+    {
+        Assert.Equal(GeminiUsageParser.FiveHours, PaceWindows.KnownLengthMs("gemini.gemini-5h"));
+        Assert.Equal(GeminiUsageParser.FiveHours, PaceWindows.KnownLengthMs("gemini.3p-5h"));
+        Assert.Equal(GeminiUsageParser.Week, PaceWindows.KnownLengthMs("gemini.gemini-weekly"));
+        Assert.Equal(GeminiUsageParser.Week, PaceWindows.KnownLengthMs("gemini.3p-weekly"));
+        Assert.Equal(GeminiUsageParser.Week, PaceWindows.KnownLengthMs("gemini.argon-weekly"));
+
+        var cached = new[] { new UsageMeter("gemini.gemini-5h", "Gemini 5-hour", UsedPercent: 30, RemainingPercent: 70) };
+        var snapshot = new UsageSnapshot(
+            Now,
+            Providers: new[] { new ProviderSnapshot("gemini", "Gemini", "ERROR") },
+            SectionHealth: new[]
+            {
+                new SectionHealth("gemini", LastAttemptEpochMs: Now, LastSuccessEpochMs: Now - 60_000,
+                    LastOutcome: "NETWORK", ShortReason: "Network error", LastGoodMeters: cached, LastGoodPlanLabel: "Ultra", SignedIn: true)
+            });
+        var gemini = UsageSections.From(snapshot, Now).Single(s => s.Id == SoftwareSectionId.Gemini);
+        Assert.Single(gemini.MeterList);
+        Assert.Equal("Ultra", gemini.Subtitle);
+        Assert.Equal("Network error", gemini.Error);
+        Assert.True(gemini.StaleValue.IsStale);
+    }
+
+    [Fact]
+    public void OrdersFiveHourBeforeWeeklyForThirdPartyPools()
+    {
+        var json = """
+            {
+              "groups": [
+                {
+                  "displayName": "Third-party",
+                  "buckets": [
+                    { "bucketId": "3p-weekly", "remainingFraction": 1.0 },
+                    { "bucketId": "3p-5h", "remainingFraction": 1.0 }
+                  ]
+                },
+                {
+                  "displayName": "Gemini",
+                  "buckets": [
+                    { "bucketId": "gemini-weekly", "remainingFraction": 0.9 },
+                    { "bucketId": "gemini-5h", "remainingFraction": 0.6 }
+                  ]
+                }
+              ]
+            }
+            """;
+        var ids = GeminiUsageParser.Merge(json).Select(m => m.Id).ToArray();
+        Assert.Equal(new[] { "gemini.gemini-5h", "gemini.gemini-weekly", "gemini.3p-5h", "gemini.3p-weekly" }, ids);
+    }
 }

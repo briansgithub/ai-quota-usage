@@ -23,6 +23,15 @@ object RefreshSchedule {
         return lastSuccessEpochMs <= 0L || nowMs - lastSuccessEpochMs >= WAKE_STALE_AFTER_MS
     }
 
+    fun shouldRefreshOnWake(snapshot: UsageSnapshot, lastWakeRequestEpochMs: Long, nowMs: Long): Boolean {
+        if (lastWakeRequestEpochMs > 0L && nowMs - lastWakeRequestEpochMs < WAKE_MIN_GAP_MS) return false
+        if (shouldRefreshOnWake(lastSuccessEpochMs(snapshot), lastWakeRequestEpochMs, nowMs)) return true
+        val hydrated = HealthSynthesis.hydrate(snapshot)
+        return hydrated.sectionHealth.any { health ->
+            health.signedIn && health.staleView(nowMs).isStale
+        }
+    }
+
     fun nextEpochMs(lastPeriodicRunEpochMs: Long, armedEpochMs: Long, nowMs: Long): Long {
         if (lastPeriodicRunEpochMs > 0L) return lastPeriodicRunEpochMs + INTERVAL_MS
         if (armedEpochMs > 0L) return armedEpochMs

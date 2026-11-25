@@ -467,10 +467,11 @@ fun UsageBar(meter: UsageMeter, nowMs: Long) {
             )
         }
         if (!meter.isCapBar && expected != null) {
-            val tickX = maxWidth * (expected.coerceIn(0.0, 100.0) / 100.0).toFloat()
+            val tickX = (maxWidth * (expected.coerceIn(0.0, 100.0) / 100.0).toFloat() - 1.dp)
+                .coerceIn(0.dp, (maxWidth - 2.dp).coerceAtLeast(0.dp))
             Box(
                 modifier = Modifier
-                    .offset(x = tickX - 1.dp)
+                    .offset(x = tickX)
                     .width(2.dp)
                     .fillMaxHeight()
                     .background(Color(0xFFF5F5F5))
