@@ -194,7 +194,10 @@ private fun WidgetContent(
                     is WidgetRow.Gap -> Spacer(GlanceModifier.height(if (compact) 8.dp else 12.dp))
                     is WidgetRow.Header -> SectionHeader(row.title, row.stale, row.nested)
                     is WidgetRow.GroupHeader -> GroupHeader(row.title)
-                    is WidgetRow.Meter -> MeterGlanceRow(row.meter, now, compact, size.width)
+                    is WidgetRow.Meter -> MeterGlanceRow(row, now, compact, size.width)
+                    is WidgetRow.SharedReset -> ResetLine(
+                        NyTime.formatResetSegments(row.at, now, row.label), row.at, now
+                    )
                     is WidgetRow.SignIn -> SignInRow(row.title, row.providerId)
                     is WidgetRow.Message -> MessageRow(row.text, row.warn, row.emphasize, row.imminent)
                 }
@@ -232,12 +235,12 @@ internal fun updatedAgoLabel(
     return if (compact) ago else "updated $ago"
 }
 
-private sealed class WidgetRow {
+internal sealed class WidgetRow {
     data object Gap : WidgetRow()
     data class Header(val title: String, val stale: StaleView, val nested: Boolean = false) : WidgetRow()
-    /** Top-level group title in group-by-limit mode (e.g. "Short limits (5-hr)"). */
     data class GroupHeader(val title: String) : WidgetRow()
-    data class Meter(val meter: UsageMeter) : WidgetRow()
+    data class Meter(val meter: UsageMeter, val title: String = meter.title, val showReset: Boolean = true) : WidgetRow()
+    data class SharedReset(val at: Long, val label: String) : WidgetRow()
     data class SignIn(val title: String, val providerId: String) : WidgetRow()
     data class Message(
         val text: String,
@@ -247,6 +250,7 @@ private sealed class WidgetRow {
     ) : WidgetRow()
 
     fun stableId(index: Int): Long = when (this) {
+        is SharedReset -> 600L + index
         is Gap -> 50L + index
         is Header -> 100L + title.hashCode() + (if (nested) 7L + index else 0L)
         is GroupHeader -> 150L + title.hashCode()
@@ -256,7 +260,7 @@ private sealed class WidgetRow {
     }
 }
 
-private fun widgetRows(
+internal fun widgetRows(
     sections: List<SoftwareSection>,
     includePace: Boolean = false,
     percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW,
@@ -272,12 +276,16 @@ private fun widgetRows(
         }
         return rows
     }
-    LimitGrouping.group(sections, nowMs).forEachIndexed { groupIndex, group ->
-        if (groupIndex > 0) rows += WidgetRow.Gap
+    LimitGrouping.group(sections, nowMs).forEach { group ->
         rows += WidgetRow.GroupHeader(group.kind.title)
         group.entries.forEach { entry: LimitGroupEntry ->
-            rows += WidgetRow.Header(entry.section.id.title, entry.section.stale, nested = true)
-            appendSectionBody(rows, entry.section, entry.meters, entry.primary, includePace, percentPerWindow, nowMs)
+            val single = entry.meters.singleOrNull()
+            val inlineProvider = single != null && !entry.section.stale.isStale &&
+                (single.hasUsageBar || single.resetsAtEpochMs != null)
+            if (!inlineProvider) {
+                rows += WidgetRow.Header(entry.section.id.title, entry.section.stale, nested = true)
+            }
+            appendSectionBody(rows, entry.section, entry.meters, entry.primary, includePace, percentPerWindow, nowMs, inlineProvider)
         }
     }
     return rows
@@ -295,7 +303,8 @@ private fun appendSectionBody(
     primary: Boolean,
     includePace: Boolean,
     percentPerWindow: Double,
-    nowMs: Long
+    nowMs: Long,
+    inlineProvider: Boolean = false
 ) {
     val hasData = meters.any { it.hasUsageBar || it.resetsAtEpochMs != null }
     if (primary && section.stale.isStale) {
@@ -306,7 +315,21 @@ private fun appendSectionBody(
         }
     }
     if (hasData) {
-        meters.forEach { rows += WidgetRow.Meter(it) }
+        val sharedReset = meters.first().resetsAtEpochMs?.takeIf { at ->
+            meters.size > 1 && meters.all { it.resetsAtEpochMs == at }
+        }
+        for (meter in meters) {
+            if (sharedReset != null && meter.id == "cursor.plan_reset" && !meter.hasUsageBar) continue
+            val provider = section.id.title
+            val title = if (inlineProvider && !meter.title.startsWith(provider, ignoreCase = true)) {
+                "$provider · ${meter.title}"
+            } else meter.title
+            rows += WidgetRow.Meter(meter, title, showReset = sharedReset == null)
+        }
+        if (sharedReset != null) {
+            val label = if (meters.any { it.id == "cursor.plan_reset" }) "Plan reset" else "All reset"
+            rows += WidgetRow.SharedReset(sharedReset, label)
+        }
     }
     if (!primary) return
     section.manualResets?.displayLine()?.let { line ->
@@ -353,7 +376,8 @@ private fun appendSectionBody(
 private fun GroupHeader(title: String) {
     Text(
         text = title,
-        style = TextStyle(color = Bright, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        modifier = GlanceModifier.padding(top = 4.dp),
+        style = TextStyle(color = Bright, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     )
 }
 
@@ -423,11 +447,12 @@ private fun MessageRow(
 
 @Composable
 private fun MeterGlanceRow(
-    meter: UsageMeter,
+    row: WidgetRow.Meter,
     nowMs: Long,
     compact: Boolean,
     tileWidth: Dp
 ) {
+    val meter = row.meter
     val used = meter.usedLabel()
     val resetSegments = meter.resetsAtEpochMs?.let { NyTime.formatResetSegments(it, nowMs) }
         ?: meter.resetLabel?.takeIf { it.isNotBlank() }?.let { listOf(ResetSegment(it, emphasized = false)) }
@@ -439,7 +464,7 @@ private fun MeterGlanceRow(
     ) {
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = meter.title,
+                text = row.title,
                 style = TextStyle(color = TextOn, fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 modifier = GlanceModifier.defaultWeight()
             )
@@ -448,7 +473,7 @@ private fun MeterGlanceRow(
                     text = used,
                     style = TextStyle(color = TextOn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 )
-            } else if (resetSegments.isNotEmpty() && !meter.hasUsageBar) {
+            } else if (row.showReset && resetSegments.isNotEmpty() && !meter.hasUsageBar) {
                 ResetLine(resetSegments, meter.resetsAtEpochMs, nowMs)
             }
         }
@@ -456,7 +481,7 @@ private fun MeterGlanceRow(
             Spacer(GlanceModifier.height(4.dp))
             GlancePaceBar(meter, nowMs, tileWidth)
         }
-        if (used != null && resetSegments.isNotEmpty()) {
+        if (row.showReset && used != null && resetSegments.isNotEmpty()) {
             Spacer(GlanceModifier.height(2.dp))
             ResetLine(resetSegments, meter.resetsAtEpochMs, nowMs)
         }

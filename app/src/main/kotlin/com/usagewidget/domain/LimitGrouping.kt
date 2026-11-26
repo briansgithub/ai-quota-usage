@@ -3,10 +3,10 @@ package com.usagewidget.domain
 /** Rate-limit window length class used by the widget's "group by limit" mode. */
 enum class LimitKind(val title: String) {
     /** Windows of 24 hours or less (5-hour sessions, daily caps). */
-    SHORT("Short limits (5-hr)"),
+    SHORT("Short limits"),
 
     /** Everything longer: weekly, 30-day, monthly billing cycles, and spend caps. */
-    LONG("Long limits (weekly / monthly)"),
+    LONG("Long limits"),
 
     /** Software with no bars at all (sign-in prompt, error, loading): kept visible at the end. */
     NO_DATA("Needs attention")

@@ -48,11 +48,6 @@ import com.usagewidget.ui.theme.CursorOutline
 import com.usagewidget.ui.theme.CursorText
 import com.usagewidget.ui.theme.primaryContainerDark
 
-/**
- * Display settings shared by the Settings dialog and the Diagnostics screen:
- * on-demand spend bars (app and widget), the usage-left filter (app and widget), then
- * per-bar visibility on the widget.
- */
 @Composable
 fun DisplaySettings(
     display: DisplayPreferences,
@@ -90,7 +85,7 @@ fun DisplaySettings(
         }
         SettingsGroup(
             title = "Widget layout",
-            hint = "Off: bars grouped by software. On: weekly / monthly limits first, then 5-hour; inside, software and bars behind even pace come first. Widget only."
+            hint = "Group by software, or show long limits first. Within each limit group, usage behind pace comes first."
         ) {
             ChipRow {
                 ToggleChip("Group by limit length", display.groupByLimit, onGroupByLimit)

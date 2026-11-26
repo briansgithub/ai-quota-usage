@@ -50,7 +50,6 @@ import com.usagewidget.BuildConfig
 import com.usagewidget.domain.DiagnosticsReport
 import com.usagewidget.domain.FetchAttempt
 import com.usagewidget.domain.HealthSynthesis
-import com.usagewidget.ui.settings.DisplaySettings
 import com.usagewidget.domain.QuotaRuleId
 import com.usagewidget.domain.SectionHealth
 import com.usagewidget.domain.SoftwareSectionId
@@ -74,7 +73,6 @@ fun DiagnosticsScreen(
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val alerts by viewModel.alertPreferences.collectAsStateWithLifecycle()
     val quota by viewModel.quotaPreferences.collectAsStateWithLifecycle()
-    val display by viewModel.displayPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val hydrated = HealthSynthesis.hydrate(snapshot)
 
@@ -82,7 +80,7 @@ fun DiagnosticsScreen(
         containerColor = CursorChrome,
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("Alerts and diagnostics") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -112,22 +110,7 @@ fun DiagnosticsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Settings", style = MaterialTheme.typography.titleMedium, color = CursorText)
-                DisplaySettings(
-                    display = display,
-                    onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
-                    onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
-                    onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
-                    onGroupByLimit = viewModel::setGroupByLimit,
-                    onWidgetBar = viewModel::setWidgetBarVisible,
-                    onMoveWidgetSection = viewModel::moveWidgetSection
-                )
-                HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
-                Text(
-                    "Background refresh every 15 minutes (WorkManager periodic minimum).",
-                    color = CursorMuted,
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Text("Notifications", style = MaterialTheme.typography.titleMedium, color = CursorText)
                 SettingSwitch(
                     label = stringResource(R.string.failure_notifications),
                     checked = alerts.notifyStaleFailures,

@@ -5,11 +5,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,20 +40,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         maybeOpenLoginFromIntent()
-        val dumpUsage = intent.getBooleanExtra(EXTRA_DUMP_USAGE, false)
-        val openDiagnostics = dumpUsage || intent.getBooleanExtra(EXTRA_OPEN_DIAGNOSTICS, false)
-        val openSettings = intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false)
-        if (openDiagnostics) intent.removeExtra(EXTRA_OPEN_DIAGNOSTICS)
-        if (openSettings) intent.removeExtra(EXTRA_OPEN_SETTINGS)
-        if (dumpUsage) {
-            intent.removeExtra(EXTRA_DUMP_USAGE)
-            dumpUsageToLogcat()
-        }
+        handleScreenIntent()
         maybeRequestNotificationPermission(force = intent.getBooleanExtra(EXTRA_TEST_NOTIFICATION, false))
         maybeSendTestNotification(intent)
         setContent {
             UsageWidgetTheme {
-                var diagnostics by rememberSaveable { mutableStateOf(openDiagnostics || openSettings) }
+                var diagnostics by rememberSaveable { mutableStateOf(false) }
+                var settingsOpen by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(requestedScreen) {
+                    requestedScreen?.let {
+                        diagnostics = it == EXTRA_OPEN_DIAGNOSTICS
+                        settingsOpen = it == EXTRA_OPEN_SETTINGS
+                        requestedScreen = null
+                    }
+                }
+                BackHandler(enabled = diagnostics) { diagnostics = false }
                 if (diagnostics) {
                     DiagnosticsScreen(
                         viewModel = viewModel,
@@ -65,7 +68,8 @@ class MainActivity : ComponentActivity() {
                         viewModel = viewModel,
                         onSignIn = { provider -> startActivity(LoginActivity.intent(this, provider)) },
                         onOpenDiagnostics = { diagnostics = true },
-                        openSettings = false
+                        settingsOpen = settingsOpen,
+                        onSettingsChange = { settingsOpen = it }
                     )
                 }
             }
@@ -81,12 +85,22 @@ class MainActivity : ComponentActivity() {
             maybeRequestNotificationPermission(force = true)
             maybeSendTestNotification(intent)
         }
-        if (intent.getBooleanExtra(EXTRA_DUMP_USAGE, false) ||
-            intent.getBooleanExtra(EXTRA_OPEN_DIAGNOSTICS, false) ||
-            intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false)
-        ) {
-            recreate()
+        handleScreenIntent()
+    }
+
+    private var requestedScreen by mutableStateOf<String?>(null)
+
+    private fun handleScreenIntent() {
+        val dump = intent.getBooleanExtra(EXTRA_DUMP_USAGE, false)
+        requestedScreen = when {
+            dump || intent.getBooleanExtra(EXTRA_OPEN_DIAGNOSTICS, false) -> EXTRA_OPEN_DIAGNOSTICS
+            intent.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) -> EXTRA_OPEN_SETTINGS
+            else -> null
         }
+        intent.removeExtra(EXTRA_OPEN_SETTINGS)
+        intent.removeExtra(EXTRA_OPEN_DIAGNOSTICS)
+        intent.removeExtra(EXTRA_DUMP_USAGE)
+        if (dump) dumpUsageToLogcat()
     }
 
     override fun onResume() {

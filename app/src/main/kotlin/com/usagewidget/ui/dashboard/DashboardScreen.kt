@@ -1,5 +1,7 @@
 package com.usagewidget.ui.dashboard
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,22 +20,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -43,12 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,14 +52,12 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.usagewidget.R
 import com.usagewidget.domain.DisplayPreferences
 import com.usagewidget.domain.NyTimeAgo
-import androidx.compose.foundation.layout.heightIn
 import com.usagewidget.domain.OnDemandDisplay
 import com.usagewidget.domain.UsageRemaining
 import com.usagewidget.ui.settings.DisplaySettings
@@ -108,27 +101,19 @@ fun DashboardScreen(
     viewModel: DashboardViewModel,
     onSignIn: (ProviderId) -> Unit,
     onOpenDiagnostics: () -> Unit,
-    openSettings: Boolean = false
+    settingsOpen: Boolean,
+    onSettingsChange: (Boolean) -> Unit
 ) {
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val refreshing by viewModel.refreshing.collectAsStateWithLifecycle()
     val nextRefreshAt by viewModel.nextRefreshAtEpochMs.collectAsStateWithLifecycle()
     val alerts by viewModel.alertPreferences.collectAsStateWithLifecycle()
     val display by viewModel.displayPreferences.collectAsStateWithLifecycle()
-    var settingsOpen by remember { mutableStateOf(openSettings) }
-
-    if (settingsOpen) {
-        OnDemandSettingsDialog(
-            display = display,
-            onCursor = viewModel::setShowCursorOnDemand,
-            onGrok = viewModel::setShowGrokOnDemand,
-            onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
-            onGroupByLimit = viewModel::setGroupByLimit,
-            onWidgetBar = viewModel::setWidgetBarVisible,
-            onMoveWidgetSection = viewModel::moveWidgetSection,
-            onDismiss = { settingsOpen = false }
-        )
+    val scroll = rememberScrollState()
+    LaunchedEffect(settingsOpen) {
+        if (settingsOpen) scroll.scrollTo(0)
     }
+    BackHandler(enabled = settingsOpen) { onSettingsChange(false) }
 
     Scaffold(
         containerColor = CursorChrome,
@@ -136,12 +121,10 @@ fun DashboardScreen(
             TopAppBar(
                 title = { Text("Usage") },
                 actions = {
-                    // Refresh, then Settings at the far right. Settings opens the one full
-                    // settings screen (diagnostics are at its bottom).
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
                     }
-                    IconButton(onClick = onOpenDiagnostics) {
+                    IconButton(onClick = { onSettingsChange(!settingsOpen) }) {
                         Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.settings))
                     }
                 },
@@ -166,50 +149,29 @@ fun DashboardScreen(
                 percentPerWindow = alerts.percentPerWindow,
                 display = display,
                 onSignIn = onSignIn,
-                onSignOut = { viewModel.signOut(it) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun OnDemandSettingsDialog(
-    display: DisplayPreferences,
-    onCursor: (Boolean) -> Unit,
-    onGrok: (Boolean) -> Unit,
-    onOnlyUsageRemaining: (Boolean) -> Unit,
-    onGroupByLimit: (Boolean) -> Unit,
-    onWidgetBar: (String, Boolean) -> Unit,
-    onMoveWidgetSection: (SoftwareSectionId, Int) -> Unit,
-    onDismiss: () -> Unit
-) {
-    // Wider than the platform default so each service's bars fit on one row.
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = CursorSurface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .heightIn(max = 720.dp)
-        ) {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 18.dp, bottom = 6.dp)) {
-                Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, color = CursorText)
-                DisplaySettings(
-                    display = display,
-                    onShowCursorOnDemand = onCursor,
-                    onShowGrokOnDemand = onGrok,
-                    onOnlyUsageRemaining = onOnlyUsageRemaining,
-                    onGroupByLimit = onGroupByLimit,
-                    onWidgetBar = onWidgetBar,
-                    onMoveWidgetSection = onMoveWidgetSection,
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = 12.dp)
-                )
-                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) {
-                    Text("Done")
+                onSignOut = { viewModel.signOut(it) },
+                scroll = scroll
+            ) {
+                if (settingsOpen) {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CursorSurface).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Widget settings", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, color = CursorText)
+                            TextButton(onClick = { onSettingsChange(false) }) { Text("Done") }
+                        }
+                        TextButton(onClick = onOpenDiagnostics) { Text("Alerts and diagnostics") }
+                        DisplaySettings(
+                            display = display,
+                            onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
+                            onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
+                            onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+                            onGroupByLimit = viewModel::setGroupByLimit,
+                            onWidgetBar = viewModel::setWidgetBarVisible,
+                            onMoveWidgetSection = viewModel::moveWidgetSection
+                        )
+                    }
                 }
             }
         }
@@ -223,7 +185,9 @@ private fun DashboardBody(
     percentPerWindow: Double,
     display: DisplayPreferences,
     onSignIn: (ProviderId) -> Unit,
-    onSignOut: (ProviderId) -> Unit
+    onSignOut: (ProviderId) -> Unit,
+    scroll: ScrollState,
+    settings: @Composable () -> Unit
 ) {
     val now = System.currentTimeMillis()
     val sections = UsageRemaining.apply(
@@ -239,10 +203,11 @@ private fun DashboardBody(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        settings()
         if (anyStale) {
             val worst = sections.filter { it.stale.isStale }
                 .maxBy { if (it.stale.severity == StaleSeverity.RED) 1 else 0 }
