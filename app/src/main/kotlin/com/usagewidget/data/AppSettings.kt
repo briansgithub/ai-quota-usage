@@ -172,6 +172,10 @@ class AppSettings private constructor(context: Context) {
             publishQuota()
         }
 
+    var quotaGeminiEnabled: Boolean
+        get() = prefs.getBoolean("quota_gemini_enabled", false)
+        set(value) { prefs.edit().putBoolean("quota_gemini_enabled", value).apply(); publishQuota() }
+
     var quotaClaudeWeeklyEnabled: Boolean
         get() = prefs.getBoolean(KEY_QUOTA_CLAUDE_WEEKLY, QuotaRuleId.CLAUDE_WEEKLY.defaultEnabled)
         set(value) {
@@ -209,6 +213,27 @@ class AppSettings private constructor(context: Context) {
         val next = if (visible) current - meterId else current + meterId
         if (next == current) return
         prefs.edit().putStringSet(KEY_HIDDEN_WIDGET_BARS, next).apply()
+        publishDisplay()
+    }
+
+    val widgetSectionOrder: List<com.usagewidget.domain.SoftwareSectionId>
+        get() {
+            val raw = prefs.getString(KEY_WIDGET_SECTION_ORDER, null)
+            return com.usagewidget.domain.WidgetBars.parseSectionOrder(raw?.split(','))
+        }
+
+    fun setWidgetSectionOrder(order: List<com.usagewidget.domain.SoftwareSectionId>) {
+        val next = com.usagewidget.domain.WidgetBars.normalizeSectionOrder(order)
+        if (next == widgetSectionOrder && prefs.contains(KEY_WIDGET_SECTION_ORDER)) return
+        prefs.edit().putString(KEY_WIDGET_SECTION_ORDER, next.joinToString(",") { it.wireName }).apply()
+        publishDisplay()
+    }
+
+    fun moveWidgetSection(section: com.usagewidget.domain.SoftwareSectionId, delta: Int) {
+        val current = widgetSectionOrder
+        val next = com.usagewidget.domain.WidgetBars.moveSection(current, section, delta)
+        if (next == current) return
+        prefs.edit().putString(KEY_WIDGET_SECTION_ORDER, next.joinToString(",") { it.wireName }).apply()
         publishDisplay()
     }
 
@@ -261,6 +286,7 @@ class AppSettings private constructor(context: Context) {
             if (quotaCodexWeeklyEnabled) add(QuotaRuleId.CODEX_WEEKLY.wire)
             if (quotaClaudeFiveHourEnabled) add(QuotaRuleId.CLAUDE_FIVE_HOUR.wire)
             if (quotaClaudeWeeklyEnabled) add(QuotaRuleId.CLAUDE_WEEKLY.wire)
+            if (quotaGeminiEnabled) addAll(QuotaRuleId.entries.filter { it.section == com.usagewidget.domain.SoftwareSectionId.GEMINI }.map { it.wire })
         }
         return QuotaThresholdPreferences(
             masterEnabled = quotaAlertsEnabled,
@@ -281,6 +307,7 @@ class AppSettings private constructor(context: Context) {
         showCursorOnDemand = showCursorOnDemand,
         showGrokOnDemand = showGrokOnDemand,
         hiddenWidgetBars = hiddenWidgetBars,
+        widgetSectionOrder = widgetSectionOrder,
         onlyUsageRemaining = onlyUsageRemaining
     )
 
@@ -316,6 +343,7 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_QUOTA_CODEX_FIVE = "quota_codex_five_hour_enabled"
         private const val KEY_QUOTA_CODEX_WEEKLY = "quota_codex_weekly_enabled"
         private const val KEY_HIDDEN_WIDGET_BARS = "hidden_widget_bars"
+        private const val KEY_WIDGET_SECTION_ORDER = "widget_section_order"
         private const val KEY_ONLY_USAGE_REMAINING = "only_usage_remaining"
         private const val KEY_QUOTA_CLAUDE_FIVE = "quota_claude_five_hour_enabled"
         private const val KEY_QUOTA_CLAUDE_WEEKLY = "quota_claude_weekly_enabled"

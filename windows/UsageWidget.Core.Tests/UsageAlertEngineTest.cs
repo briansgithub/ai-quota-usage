@@ -84,6 +84,26 @@ public class UsageAlertEngineTest
     }
 
     [Fact]
+    public void SchedulesResetWakesEvenWhenRestoredAlertsDisabledAndIncludesGemini()
+    {
+        var resetAt = Now + 60 * 60_000L;
+        var current = new UsageSnapshot(Now, Providers: new[]
+        {
+            new ProviderSnapshot("openai", "ChatGPT / Codex", "OK", Meters: new[]
+            {
+                new UsageMeter("openai.five_hour", "5-hour", UsedPercent: 50, RemainingPercent: 50, ResetsAtEpochMs: resetAt)
+            }),
+            new ProviderSnapshot("gemini", "Gemini", "OK", Meters: new[]
+            {
+                new UsageMeter("gemini.gemini-5h", "Gemini 5-hour", UsedPercent: 40, RemainingPercent: 60, ResetsAtEpochMs: resetAt)
+            })
+        });
+        var plan = UsageAlertEngine.Evaluate(UsageSnapshot.Empty(Now - Hour), current, Now, Prefs with { NotifyUsageRestored = false }, Array.Empty<string>());
+        Assert.Contains(plan.Wakes, w => w.UniqueName == "timed-reset-codex.five_hour");
+        Assert.Contains(plan.Wakes, w => w.UniqueName == "timed-reset-gemini.gemini-5h");
+    }
+
+    [Fact]
     public void NotificationDedupeDropsOldestAfterCap()
     {
         var seen = Enumerable.Range(1, NotificationDedupe.MaxKeys).Select(i => $"k{i}").ToList();

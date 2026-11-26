@@ -264,6 +264,7 @@ object PacingPlanner {
         percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW
     ): PacingResult? {
         return when (section.id) {
+            SoftwareSectionId.GEMINI -> null // Quota bars have pace ticks; no generic reminder schedule.
             SoftwareSectionId.CODEX -> {
                 val five = section.meters.find { it.id == "openai.five_hour" }
                 val weekly = section.meters.find { it.id == "openai.weekly" }
@@ -292,7 +293,7 @@ object PacingPlanner {
                     fiveHourResetEpochMs = five?.resetsAtEpochMs,
                     nowMs = nowMs,
                     percentPerWindow = percentPerWindow,
-                    manuals = emptyList(),
+                    manuals = section.manualResets?.credits.orEmpty(),
                     sectionId = section.id.wireName
                 )
             }

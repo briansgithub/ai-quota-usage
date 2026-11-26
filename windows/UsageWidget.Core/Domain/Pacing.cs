@@ -236,7 +236,7 @@ public static class PacingPlanner
                     five?.ResetsAtEpochMs,
                     nowMs,
                     percentPerWindow,
-                    null,
+                    section.ManualResets?.CreditList,
                     section.Id.Wire());
             }
             case SoftwareSectionId.GrokBot:

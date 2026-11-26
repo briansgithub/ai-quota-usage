@@ -37,6 +37,34 @@ class ClaudeUsageParserTest {
     }
 
     @Test
+    fun cedarEmberGrantsBecomeManualFullResets() {
+        val raw = """
+            {"five_hour":{"utilization":3.0,"resets_at":"2026-11-25T12:30:00+00:00"},
+             "seven_day":{"utilization":90.0,"resets_at":"2026-11-25T18:00:00+00:00"},
+             "cedar_ember":{"eligible":true,"grants":[
+               {"id":"full-reset-2611","label":"One full limit reset (November 2026)","resets_total":1,"resets_left":1,
+                "starts_at":"2026-11-10T21:30:00+00:00","ends_at":"2026-12-10T22:00:00+00:00","paused":false,"type":"full"},
+               {"id":"used","type":"full","resets_left":0,"ends_at":"2026-12-01T00:00:00+00:00"}],
+              "event_props":{"tier":"claude_pro"}}}
+        """.trimIndent()
+        val snapshot = ClaudeUsageParser.parseUsage(raw, now)
+        val resets = snapshot.manualResets!!
+        assertEquals(1, resets.availableCount)
+        assertEquals("Manual resets: 1 (exp 12/10)", resets.displayLine())
+        assertFalse(resets.observedJson!!.contains("full-reset-2611"))
+        assertFalse(resets.observedJson!!.contains("claude_pro"))
+
+        val section = UsageSections.from(UsageSnapshot(now, providers = listOf(snapshot)), now)
+            .single { it.id == SoftwareSectionId.CLAUDE }
+        assertEquals("Manual resets: 1 (exp 12/10)", section.manualResets?.displayLine())
+    }
+
+    @Test
+    fun usageWithoutCedarEmberHasNoManualResets() {
+        assertNull(ClaudeUsageParser.parseUsage(loadFixture("claude-usage.json"), now).manualResets)
+    }
+
+    @Test
     fun usageBecomesSessionWeeklyAndActiveModelMeters() {
         val snapshot = ClaudeUsageParser.parseUsage(loadFixture("claude-usage.json"), now)
         assertEquals("claude", snapshot.id)

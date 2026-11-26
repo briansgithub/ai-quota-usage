@@ -159,6 +159,41 @@ class UsageAlertEngineTest {
     }
 
     @Test
+    fun schedulesResetWakesEvenWhenRestoredAlertsDisabledAndIncludesGemini() {
+        val resetAt = now + 60 * 60_000L
+        val current = UsageSnapshot(
+            fetchedAtEpochMs = now,
+            providers = listOf(
+                ProviderSnapshot(
+                    id = ProviderId.OPENAI.wireName,
+                    displayName = "ChatGPT / Codex",
+                    status = ProviderStatus.OK.name,
+                    meters = listOf(
+                        UsageMeter("openai.five_hour", "5-hour", usedPercent = 50.0, remainingPercent = 50.0, resetsAtEpochMs = resetAt)
+                    )
+                ),
+                ProviderSnapshot(
+                    id = ProviderId.GEMINI.wireName,
+                    displayName = "Gemini",
+                    status = ProviderStatus.OK.name,
+                    meters = listOf(
+                        UsageMeter("gemini.gemini-5h", "Gemini 5-hour", usedPercent = 40.0, remainingPercent = 60.0, resetsAtEpochMs = resetAt)
+                    )
+                )
+            )
+        )
+        val plan = UsageAlertEngine.evaluate(
+            UsageSnapshot.empty(now - hour),
+            current,
+            now,
+            prefs.copy(notifyUsageRestored = false),
+            emptySet()
+        )
+        assertTrue(plan.wakes.any { it.uniqueName == "timed-reset-codex.five_hour" })
+        assertTrue(plan.wakes.any { it.uniqueName == "timed-reset-gemini.gemini-5h" })
+    }
+
+    @Test
     fun notificationDedupeDropsOldestAfterCap() {
         val seen = (1..NotificationDedupe.MAX_KEYS).map { "k$it" }.toCollection(LinkedHashSet())
         val next = NotificationDedupe.remember(seen, "new")

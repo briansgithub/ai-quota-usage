@@ -174,4 +174,20 @@ class UsageRemainingTest {
         val result = UsageRemaining.apply(pills, enabled = true, dropSpentCards = true)
         assertTrue(result.none { it.id == SoftwareSectionId.CODEX })
     }
+
+    @Test
+    fun geminiWeeklySpentHidesItsOwnFiveHourPoolOnly() {
+        val s = section(
+            SoftwareSectionId.GEMINI,
+            meter("gemini.gemini-5h", 10.0),
+            meter("gemini.gemini-weekly", 100.0),
+            meter("gemini.3p-5h", 20.0),
+            meter("gemini.3p-weekly", 40.0),
+            meter("gemini.argon-weekly", 10.0)
+        )
+        assertEquals(
+            listOf("gemini.3p-5h", "gemini.3p-weekly", "gemini.argon-weekly"),
+            ids(shown(s), SoftwareSectionId.GEMINI)
+        )
+    }
 }

@@ -62,4 +62,82 @@ public class WidgetBarsTest
         settings.SetWidgetBarVisible("openai.weekly", true);
         Assert.Empty(settings.HiddenWidgetBars);
     }
+
+    [Fact]
+    public void ReordersSectionsByCustomOrder()
+    {
+        var order = new[] { SoftwareSectionId.Gemini, SoftwareSectionId.Claude, SoftwareSectionId.Codex };
+        var shown = WidgetBars.Apply(UsageSections.From(Snapshot(), 1L), new HashSet<string>(), order);
+        Assert.Equal(
+            new[]
+            {
+                SoftwareSectionId.Gemini,
+                SoftwareSectionId.Claude,
+                SoftwareSectionId.Codex,
+                SoftwareSectionId.Cursor,
+                SoftwareSectionId.GrokBot
+            },
+            shown.Select(s => s.Id).ToArray());
+    }
+
+    [Fact]
+    public void ParseSectionOrderDeduplicatesAndIgnoresUnknowns()
+    {
+        var parsed = WidgetBars.ParseSectionOrder(new[] { " claude ", "bogus", "gemini", "CLAUDE", "" });
+        Assert.Equal(
+            new[]
+            {
+                SoftwareSectionId.Claude,
+                SoftwareSectionId.Gemini,
+                SoftwareSectionId.Cursor,
+                SoftwareSectionId.GrokBot,
+                SoftwareSectionId.Codex
+            },
+            parsed);
+    }
+
+    [Fact]
+    public void MoveSectionMovesAndClampsAtBounds()
+    {
+        var initial = WidgetBars.DefaultSectionOrder;
+        Assert.Equal(initial, WidgetBars.MoveSection(initial, SoftwareSectionId.Cursor, -1));
+        Assert.Equal(initial, WidgetBars.MoveSection(initial, SoftwareSectionId.Gemini, 1));
+
+        var movedUp = WidgetBars.MoveSection(initial, SoftwareSectionId.Gemini, -1);
+        Assert.Equal(
+            new[]
+            {
+                SoftwareSectionId.Cursor,
+                SoftwareSectionId.GrokBot,
+                SoftwareSectionId.Codex,
+                SoftwareSectionId.Gemini,
+                SoftwareSectionId.Claude
+            },
+            movedUp);
+    }
+
+    [Fact]
+    public void GlancePopupRespectsSectionOrder()
+    {
+        var order = new[] { SoftwareSectionId.Claude, SoftwareSectionId.Codex };
+        var model = GlanceUsage.From(Snapshot(), 1L, sectionOrder: order);
+        Assert.Equal(
+            new[] { "Claude Session", "Claude Weekly", "Codex 5-hour", "Codex Weekly" },
+            model.Lines.Select(l => l.Label).ToArray());
+    }
+
+    [Fact]
+    public void SettingsRoundTripSectionOrder()
+    {
+        var store = new MemorySettingsStore();
+        var settings = new AppSettings(store);
+        Assert.Equal(WidgetBars.DefaultSectionOrder, settings.WidgetSectionOrder);
+
+        settings.MoveWidgetSection(SoftwareSectionId.Gemini, -1);
+        Assert.Equal(SoftwareSectionId.Gemini, settings.WidgetSectionOrder[3]);
+        Assert.Equal(SoftwareSectionId.Claude, settings.WidgetSectionOrder[4]);
+
+        var reloaded = new AppSettings(store);
+        Assert.Equal(settings.WidgetSectionOrder, reloaded.WidgetSectionOrder);
+    }
 }

@@ -57,8 +57,29 @@ public static class UsageSections
             CursorSection(cursor, hydrated.Health(SoftwareSectionId.Cursor), nowMs),
             GrokSection(cursor, hydrated.Health(SoftwareSectionId.GrokBot), nowMs),
             CodexSection(openai, hydrated.Health(SoftwareSectionId.Codex), nowMs),
-            ClaudeSection(claude, hydrated.Health(SoftwareSectionId.Claude), nowMs)
+            ClaudeSection(claude, hydrated.Health(SoftwareSectionId.Claude), nowMs),
+            GeminiSection(hydrated.Provider(ProviderId.Gemini), hydrated.Health(SoftwareSectionId.Gemini), nowMs)
         };
+    }
+
+    private static SoftwareSection GeminiSection(ProviderSnapshot? gemini, SectionHealth health, long nowMs)
+    {
+        var status = gemini?.ProviderStatus ?? ProviderStatus.Unsigned;
+        var sourceMeters = (gemini?.MeterList.Count > 0
+            ? gemini.MeterList
+            : health.OutcomeEnum == FetchOutcome.Success
+                ? Array.Empty<UsageMeter>()
+                : health.LastGoodMeterList).ToList();
+        var stale = health.StaleView(nowMs);
+        return new SoftwareSection(
+            SoftwareSectionId.Gemini,
+            ProviderId.Gemini,
+            status,
+            gemini?.PlanLabel ?? health.LastGoodPlanLabel,
+            stale.ShortReason ?? gemini?.Error,
+            sourceMeters,
+            health,
+            stale);
     }
 
     private static SoftwareSection CursorSection(ProviderSnapshot? cursor, SectionHealth health, long nowMs)
@@ -196,7 +217,8 @@ public static class UsageSections
             stale.ShortReason ?? claude?.Error,
             meters,
             health,
-            stale);
+            stale,
+            claude?.ManualResets ?? health.LastGoodManualResets);
     }
 
     private static string? WithoutGrokError(string? error) =>

@@ -16,7 +16,7 @@ public static class CursorEndpoints
 }
 
 public sealed record CursorPlanUsage(string? PlanLabel, double? CursorModelsUsedPercent, double? OtherModelsUsedPercent, long? ResetsAtEpochMs, long? WindowStartEpochMs = null, OnDemandSpend? OnDemand = null);
-public sealed record CursorGrokUsage(double UsedPercent, long? ResetsAtEpochMs, bool HasIncludedAllowance, string? PlanLabel, long? WindowStartEpochMs = null, OnDemandSpend? OnDemand = null);
+public sealed record CursorGrokUsage(double UsedPercent, long? ResetsAtEpochMs, bool HasIncludedAllowance, string? PlanLabel, long? WindowStartEpochMs = null, OnDemandSpend? OnDemand = null, bool OnDemandDisabled = false);
 public sealed record CursorHtmlUsage(CursorPlanUsage Plan, CursorGrokUsage? Grok);
 
 /// <summary>
@@ -128,7 +128,9 @@ public static class CursorUsageParser
         var included = root.Bool("hasNonZeroIncludedLimit", "has_non_zero_included_limit");
         var includedZero = root.Bool("includedLimitZero", "included_limit_zero");
         var hasAllowance = included == true || includedZero != true;
-        return new CursorGrokUsage(used, resetMs, hasAllowance, root.Str("grokPlanLabel", "grok_plan_label", "cursorPlanName", "cursor_plan_name"), startMs, OnDemandSpend.FromSandUsage(root));
+        var onDemandDisabled = root.Obj("onDemandSettings", "on_demand_settings")?.Bool("enabled") == false
+            || root.Obj("onDemand", "on_demand")?.Bool("enabled") == false;
+        return new CursorGrokUsage(used, resetMs, hasAllowance, root.Str("grokPlanLabel", "grok_plan_label", "cursorPlanName", "cursor_plan_name"), startMs, OnDemandSpend.FromSandUsage(root), onDemandDisabled);
     }
 
     public static ProviderSnapshot ToSnapshot(CursorPlanUsage? plan, CursorGrokUsage? grok, string? planError = null, string? grokError = null, string source = "json")
@@ -145,7 +147,7 @@ public static class CursorUsageParser
         }
         if (grok is { HasIncludedAllowance: true })
             meters.Add(Meter("cursor.grok_bot", "Grok Bot", "Weekly usage", grok.UsedPercent, grok.ResetsAtEpochMs, grok.WindowStartEpochMs, PacingPolicy.GrokPeriodMs));
-        var grokDemand = grok?.OnDemand ?? plan?.OnDemand;
+        var grokDemand = grok?.OnDemandDisabled == true ? null : grok?.OnDemand ?? plan?.OnDemand;
         if (grokDemand is not null)
             meters.Add(grokDemand.ToMeter("cursor.grok_on_demand"));
         var errors = new[] { planError is null ? null : $"Plan: {planError}", grokError is null ? null : $"Grok Bot: {grokError}" }.Where(e => e is not null);

@@ -71,13 +71,15 @@ class UsageRepository private constructor(private val context: Context) {
             val previous = _snapshot.value
             val cursorResult = fetchProvider(ProviderId.CURSOR, allowHtmlFallback, now)
             val openaiResult = fetchProvider(ProviderId.OPENAI, allowHtmlFallback, now)
+            val geminiResult = fetchProvider(ProviderId.GEMINI, false, now)
             val claudeResult = fetchProvider(ProviderId.CLAUDE, allowHtmlFallback, now)
             val combined = SnapshotMerger.merge(
                 previous = previous,
                 rounds = listOf(
                     SnapshotMerger.ProviderRound(ProviderId.CURSOR, cursorResult, cookies.hasSession(ProviderId.CURSOR)),
                     SnapshotMerger.ProviderRound(ProviderId.OPENAI, openaiResult, cookies.hasSession(ProviderId.OPENAI)),
-                    SnapshotMerger.ProviderRound(ProviderId.CLAUDE, claudeResult, cookies.hasSession(ProviderId.CLAUDE))
+                    SnapshotMerger.ProviderRound(ProviderId.CLAUDE, claudeResult, cookies.hasSession(ProviderId.CLAUDE)),
+                    SnapshotMerger.ProviderRound(ProviderId.GEMINI, geminiResult, cookies.hasSession(ProviderId.GEMINI))
                 ),
                 nowMs = now
             )
@@ -118,8 +120,10 @@ class UsageRepository private constructor(private val context: Context) {
                 ProviderId.CURSOR -> cursor.fetch(now)
                 ProviderId.OPENAI -> openai.fetch(now)
                 ProviderId.CLAUDE -> claude.fetch(now)
+                ProviderId.GEMINI -> com.usagewidget.providers.gemini.GeminiOAuth.fetch(cookies, now)
             }
         }
+        if (provider == ProviderId.GEMINI) return result
         if (result is ProviderResult.Success || result is ProviderResult.NeedsSignIn) {
             return result
         }
@@ -162,7 +166,7 @@ class UsageRepository private constructor(private val context: Context) {
                             attempts = result.attempts + openai.htmlAttempt(now)
                         )
                     }
-                    ProviderId.CLAUDE -> error("unreachable")
+                    ProviderId.CLAUDE, ProviderId.GEMINI -> error("unreachable")
                 }
             }.getOrElse { htmlError ->
                 val htmlAttempts = htmlFallbackAttempts(provider, htmlError, now)
@@ -183,6 +187,7 @@ class UsageRepository private constructor(private val context: Context) {
         now: Long
     ): List<FetchAttempt> {
         return when (provider) {
+            ProviderId.GEMINI -> emptyList()
             ProviderId.CURSOR -> listOf(
                 FetchErrorClassifier.attempt(
                     error, SoftwareSectionId.CURSOR, CursorEndpoints.SPENDING_PAGE, now, source = "html"

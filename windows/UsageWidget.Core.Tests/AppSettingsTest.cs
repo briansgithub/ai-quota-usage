@@ -31,6 +31,7 @@ public class AppSettingsTest
         Assert.False(state.QuotaCodexWeeklyEnabled);
         Assert.True(state.ShowCursorOnDemand);
         Assert.True(state.ShowGrokOnDemand);
+        Assert.Null(state.WidgetSectionOrder);
     }
 
     [Fact]

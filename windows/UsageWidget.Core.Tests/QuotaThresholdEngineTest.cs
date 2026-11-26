@@ -38,7 +38,7 @@ public class QuotaThresholdEngineTest
         var seeded = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 45.0), Now, Prefs, new Dictionary<string, QuotaThresholdState>(), false);
         var notified = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 38.0), Now, Prefs, planDict(seeded), false);
         Assert.Single(notified.Alerts);
-        Assert.Contains("40% weekly quota left", notified.Alerts[0].Body);
+        Assert.Contains("60% weekly quota used", notified.Alerts[0].Body);
         var again = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 35.0), Now, Prefs, planDict(notified), false);
         Assert.Empty(again.Alerts);
     }
@@ -49,7 +49,7 @@ public class QuotaThresholdEngineTest
         var seeded = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 55.0), Now, Prefs, new Dictionary<string, QuotaThresholdState>(), false);
         var plan = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 18.0), Now, Prefs, planDict(seeded), false);
         Assert.Single(plan.Alerts);
-        Assert.Contains("20% weekly quota left", plan.Alerts[0].Body);
+        Assert.Contains("80% weekly quota used", plan.Alerts[0].Body);
         Assert.Contains(plan.States[QuotaRuleId.GrokWeekly.Wire()].FiredList, t => t == 20);
         Assert.Contains(plan.States[QuotaRuleId.GrokWeekly.Wire()].FiredList, t => t == 50);
     }
@@ -65,7 +65,7 @@ public class QuotaThresholdEngineTest
         Assert.Empty(nextWindow.States[QuotaRuleId.GrokWeekly.Wire()].FiredList);
         var drop = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 85.0, grokResetAt: newReset), Now, Prefs, planDict(nextWindow), false);
         Assert.Single(drop.Alerts);
-        Assert.Contains("90% weekly quota left", drop.Alerts[0].Body);
+        Assert.Contains("10% weekly quota used", drop.Alerts[0].Body);
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public class QuotaThresholdEngineTest
         Assert.Equal(45.0, quietDrop.States[QuotaRuleId.GrokWeekly.Wire()].Remaining);
         var after = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 18.0), Now, Prefs, planDict(quietDrop), false);
         Assert.Single(after.Alerts);
-        Assert.Contains("20% weekly quota left", after.Alerts[0].Body);
+        Assert.Contains("80% weekly quota used", after.Alerts[0].Body);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class QuotaThresholdEngineTest
         var local = DateTime.SpecifyKind(new DateTime(2026, 11, 9, 15, 0, 0), DateTimeKind.Unspecified);
         var mondayThree = NyTime.ToUnixMs(TimeZoneInfo.ConvertTimeToUtc(local, NyTime.Zone));
         var body = QuotaThresholdEngine.BodyFor(QuotaRuleId.GrokWeekly, 20, mondayThree);
-        Assert.Equal("Grok Bot: 20% weekly quota left (resets Mon 3:00 PM ET)", body);
+        Assert.Equal("Grok Bot: 80% weekly quota used (resets Mon 3:00 PM ET)", body);
         Assert.Equal(QuotaThresholdEngine.TestBody, body);
     }
 
@@ -205,7 +205,7 @@ public class QuotaThresholdEngineTest
         var seeded = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 80.0), Now, custom, new Dictionary<string, QuotaThresholdState>(), false);
         var plan = QuotaThresholdEngine.Evaluate(LiveSnapshot(grokRemaining: 9.0), Now, custom, planDict(seeded), false);
         Assert.Single(plan.Alerts);
-        Assert.Contains("10% weekly quota left", plan.Alerts[0].Body);
+        Assert.Contains("90% weekly quota used", plan.Alerts[0].Body);
     }
 
     private static Dictionary<string, QuotaThresholdState> planDict(QuotaThresholdPlan plan) =>

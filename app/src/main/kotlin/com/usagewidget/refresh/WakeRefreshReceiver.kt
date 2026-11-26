@@ -22,8 +22,8 @@ class WakeRefreshReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val app = context.applicationContext
         val now = System.currentTimeMillis()
-        val lastSuccess = RefreshSchedule.lastSuccessEpochMs(UsageRepository.get(app).snapshot.value)
-        if (!RefreshSchedule.shouldRefreshOnWake(lastSuccess, lastRequestEpochMs, now)) return
+        val snapshot = UsageRepository.get(app).snapshot.value
+        if (!RefreshSchedule.shouldRefreshOnWake(snapshot, lastRequestEpochMs, now)) return
         lastRequestEpochMs = now
         UsageRefreshWorker.enqueueExpedited(app)
     }
