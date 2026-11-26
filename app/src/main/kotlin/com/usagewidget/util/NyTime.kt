@@ -73,6 +73,11 @@ object NyTime {
         )
     }
 
+    fun formatResetTime(epochMs: Long): String {
+        val zoned = Instant.ofEpochMilli(epochMs).atZone(zone)
+        return "${zoned.format(weekday)} ${formatResetClock(zoned)}"
+    }
+
     fun formatResetClock(zoned: ZonedDateTime): String {
         val formatter = if (zoned.minute == 0) clockHour else clockHourMinute
         return zoned.format(formatter)
