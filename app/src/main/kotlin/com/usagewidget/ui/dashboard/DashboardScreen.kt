@@ -123,6 +123,7 @@ fun DashboardScreen(
             onCursor = viewModel::setShowCursorOnDemand,
             onGrok = viewModel::setShowGrokOnDemand,
             onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+            onGroupByLimit = viewModel::setGroupByLimit,
             onWidgetBar = viewModel::setWidgetBarVisible,
             onMoveWidgetSection = viewModel::moveWidgetSection,
             onDismiss = { settingsOpen = false }
@@ -177,6 +178,7 @@ private fun OnDemandSettingsDialog(
     onCursor: (Boolean) -> Unit,
     onGrok: (Boolean) -> Unit,
     onOnlyUsageRemaining: (Boolean) -> Unit,
+    onGroupByLimit: (Boolean) -> Unit,
     onWidgetBar: (String, Boolean) -> Unit,
     onMoveWidgetSection: (SoftwareSectionId, Int) -> Unit,
     onDismiss: () -> Unit
@@ -198,6 +200,7 @@ private fun OnDemandSettingsDialog(
                     onShowCursorOnDemand = onCursor,
                     onShowGrokOnDemand = onGrok,
                     onOnlyUsageRemaining = onOnlyUsageRemaining,
+                    onGroupByLimit = onGroupByLimit,
                     onWidgetBar = onWidgetBar,
                     onMoveWidgetSection = onMoveWidgetSection,
                     modifier = Modifier

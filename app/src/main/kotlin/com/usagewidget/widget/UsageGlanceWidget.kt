@@ -50,6 +50,8 @@ import androidx.glance.text.TextStyle
 import com.usagewidget.MainActivity
 import com.usagewidget.data.AppSettings
 import com.usagewidget.data.UsageRepository
+import com.usagewidget.domain.LimitGrouping
+import com.usagewidget.domain.LimitGroupEntry
 import com.usagewidget.domain.NyTimeAgo
 import com.usagewidget.domain.OnDemandDisplay
 import com.usagewidget.domain.UsageRemaining
@@ -141,7 +143,7 @@ private fun WidgetContent(
         dropSpentCards = true
     )
     val anyStale = sections.any { it.stale.isStale }
-    val rows = widgetRows(sections, includePace = !compact, percentPerWindow, now)
+    val rows = widgetRows(sections, includePace = !compact, percentPerWindow, now, settings.groupByLimit)
 
     Column(
         modifier = GlanceModifier
@@ -190,7 +192,8 @@ private fun WidgetContent(
             ) { _, row ->
                 when (row) {
                     is WidgetRow.Gap -> Spacer(GlanceModifier.height(if (compact) 8.dp else 12.dp))
-                    is WidgetRow.Header -> SectionHeader(row.title, row.stale)
+                    is WidgetRow.Header -> SectionHeader(row.title, row.stale, row.nested)
+                    is WidgetRow.GroupHeader -> GroupHeader(row.title)
                     is WidgetRow.Meter -> MeterGlanceRow(row.meter, now, compact, size.width)
                     is WidgetRow.SignIn -> SignInRow(row.title, row.providerId)
                     is WidgetRow.Message -> MessageRow(row.text, row.warn, row.emphasize, row.imminent)
@@ -231,7 +234,9 @@ internal fun updatedAgoLabel(
 
 private sealed class WidgetRow {
     data object Gap : WidgetRow()
-    data class Header(val title: String, val stale: StaleView) : WidgetRow()
+    data class Header(val title: String, val stale: StaleView, val nested: Boolean = false) : WidgetRow()
+    /** Top-level group title in group-by-limit mode (e.g. "Short limits (5-hr)"). */
+    data class GroupHeader(val title: String) : WidgetRow()
     data class Meter(val meter: UsageMeter) : WidgetRow()
     data class SignIn(val title: String, val providerId: String) : WidgetRow()
     data class Message(
@@ -243,7 +248,8 @@ private sealed class WidgetRow {
 
     fun stableId(index: Int): Long = when (this) {
         is Gap -> 50L + index
-        is Header -> 100L + title.hashCode()
+        is Header -> 100L + title.hashCode() + (if (nested) 7L + index else 0L)
+        is GroupHeader -> 150L + title.hashCode()
         is Meter -> 200L + meter.id.hashCode()
         is SignIn -> 300L + providerId.hashCode()
         is Message -> 400L + index
@@ -254,67 +260,105 @@ private fun widgetRows(
     sections: List<SoftwareSection>,
     includePace: Boolean = false,
     percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW,
-    nowMs: Long = System.currentTimeMillis()
+    nowMs: Long = System.currentTimeMillis(),
+    groupByLimit: Boolean = false
 ): List<WidgetRow> {
     val rows = mutableListOf<WidgetRow>()
-    sections.forEachIndexed { index, section ->
-        if (index > 0) rows += WidgetRow.Gap
-        rows += WidgetRow.Header(section.id.title, section.stale)
-        val hasData = section.meters.any { it.hasUsageBar || it.resetsAtEpochMs != null }
-        if (section.stale.isStale) {
-            val line = listOfNotNull(section.stale.lastUpdatedLine, section.stale.shortReason)
-                .joinToString(" · ")
-            if (line.isNotBlank()) {
-                rows += WidgetRow.Message(line, warn = true)
-            }
+    if (!groupByLimit) {
+        sections.forEachIndexed { index, section ->
+            if (index > 0) rows += WidgetRow.Gap
+            rows += WidgetRow.Header(section.id.title, section.stale)
+            appendSectionBody(rows, section, section.meters, primary = true, includePace, percentPerWindow, nowMs)
         }
-        if (hasData) {
-            section.meters.forEach { rows += WidgetRow.Meter(it) }
-        }
-        section.manualResets?.displayLine()?.let { line ->
-            rows += WidgetRow.Message(line, warn = false, emphasize = true)
-        }
-        if (includePace) {
-            PacingPlanner.forSection(section, nowMs, percentPerWindow)?.let { pacing ->
-                rows += WidgetRow.Message(
-                    text = pacing.line,
-                    warn = pacing.urgency == PaceUrgency.TIGHT,
-                    emphasize = pacing.urgency != PaceUrgency.OK,
-                    imminent = pacing.urgency == PaceUrgency.CRITICAL ||
-                        pacing.urgency == PaceUrgency.IMPOSSIBLE
-                )
-            }
-        }
-        when (section.status) {
-            ProviderStatus.NEEDS_SIGN_IN, ProviderStatus.UNSIGNED -> {
-                if (!hasData && (section.id.title == "Codex" || section.id.title == "Claude")) {
-                    section.meters.forEach { rows += WidgetRow.Meter(it) }
-                }
-                rows += WidgetRow.SignIn(
-                    title = section.id.title,
-                    providerId = section.signInProvider.wireName
-                )
-            }
-            ProviderStatus.ERROR -> {
-                if (!hasData) {
-                    val message = section.error ?: "Could not load usage"
-                    rows += WidgetRow.SignIn(
-                        title = "${section.id.title} · $message",
-                        providerId = section.signInProvider.wireName
-                    )
-                }
-            }
-            ProviderStatus.LOADING -> {
-                rows += WidgetRow.Message("Loading…")
-            }
-            ProviderStatus.OK -> Unit
+        return rows
+    }
+    LimitGrouping.group(sections).forEachIndexed { groupIndex, group ->
+        if (groupIndex > 0) rows += WidgetRow.Gap
+        rows += WidgetRow.GroupHeader(group.kind.title)
+        group.entries.forEach { entry: LimitGroupEntry ->
+            rows += WidgetRow.Header(entry.section.id.title, entry.section.stale, nested = true)
+            appendSectionBody(rows, entry.section, entry.meters, entry.primary, includePace, percentPerWindow, nowMs)
         }
     }
     return rows
 }
 
+/**
+ * Rows under a software header. [meters] is the section's bars, or only the bars of one limit
+ * group in group-by-limit mode; the card-level lines (stale notice, manual resets, pacing,
+ * sign-in prompt) are added only for the [primary] entry so they appear once per software.
+ */
+private fun appendSectionBody(
+    rows: MutableList<WidgetRow>,
+    section: SoftwareSection,
+    meters: List<UsageMeter>,
+    primary: Boolean,
+    includePace: Boolean,
+    percentPerWindow: Double,
+    nowMs: Long
+) {
+    val hasData = meters.any { it.hasUsageBar || it.resetsAtEpochMs != null }
+    if (primary && section.stale.isStale) {
+        val line = listOfNotNull(section.stale.lastUpdatedLine, section.stale.shortReason)
+            .joinToString(" · ")
+        if (line.isNotBlank()) {
+            rows += WidgetRow.Message(line, warn = true)
+        }
+    }
+    if (hasData) {
+        meters.forEach { rows += WidgetRow.Meter(it) }
+    }
+    if (!primary) return
+    section.manualResets?.displayLine()?.let { line ->
+        rows += WidgetRow.Message(line, warn = false, emphasize = true)
+    }
+    if (includePace) {
+        PacingPlanner.forSection(section, nowMs, percentPerWindow)?.let { pacing ->
+            rows += WidgetRow.Message(
+                text = pacing.line,
+                warn = pacing.urgency == PaceUrgency.TIGHT,
+                emphasize = pacing.urgency != PaceUrgency.OK,
+                imminent = pacing.urgency == PaceUrgency.CRITICAL ||
+                    pacing.urgency == PaceUrgency.IMPOSSIBLE
+            )
+        }
+    }
+    when (section.status) {
+        ProviderStatus.NEEDS_SIGN_IN, ProviderStatus.UNSIGNED -> {
+            if (!hasData && (section.id.title == "Codex" || section.id.title == "Claude")) {
+                meters.forEach { rows += WidgetRow.Meter(it) }
+            }
+            rows += WidgetRow.SignIn(
+                title = section.id.title,
+                providerId = section.signInProvider.wireName
+            )
+        }
+        ProviderStatus.ERROR -> {
+            if (!hasData) {
+                val message = section.error ?: "Could not load usage"
+                rows += WidgetRow.SignIn(
+                    title = "${section.id.title} · $message",
+                    providerId = section.signInProvider.wireName
+                )
+            }
+        }
+        ProviderStatus.LOADING -> {
+            rows += WidgetRow.Message("Loading…")
+        }
+        ProviderStatus.OK -> Unit
+    }
+}
+
 @Composable
-private fun SectionHeader(title: String, stale: StaleView) {
+private fun GroupHeader(title: String) {
+    Text(
+        text = title,
+        style = TextStyle(color = Bright, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+    )
+}
+
+@Composable
+private fun SectionHeader(title: String, stale: StaleView, nested: Boolean = false) {
     val color = when {
         !stale.isStale -> TextOn
         stale.severity == StaleSeverity.RED -> Warn
@@ -322,7 +366,7 @@ private fun SectionHeader(title: String, stale: StaleView) {
     }
     Text(
         text = if (stale.isStale) "⚠  $title" else title,
-        style = TextStyle(color = color, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        style = TextStyle(color = color, fontSize = if (nested) 14.sp else 16.sp, fontWeight = FontWeight.Bold)
     )
 }
 

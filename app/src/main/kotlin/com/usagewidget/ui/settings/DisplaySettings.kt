@@ -59,6 +59,7 @@ fun DisplaySettings(
     onShowCursorOnDemand: (Boolean) -> Unit,
     onShowGrokOnDemand: (Boolean) -> Unit,
     onOnlyUsageRemaining: (Boolean) -> Unit,
+    onGroupByLimit: (Boolean) -> Unit,
     onWidgetBar: (meterId: String, visible: Boolean) -> Unit,
     onMoveWidgetSection: (section: SoftwareSectionId, delta: Int) -> Unit,
     modifier: Modifier = Modifier
@@ -85,6 +86,14 @@ fun DisplaySettings(
                     onIcon = Icons.Outlined.FilterAlt,
                     offIcon = Icons.Outlined.FilterAltOff
                 )
+            }
+        }
+        SettingsGroup(
+            title = "Widget layout",
+            hint = "Off: bars grouped by software. On: grouped by limit length (5-hour, then weekly / monthly), then by software. Widget only."
+        ) {
+            ChipRow {
+                ToggleChip("Group by limit length", display.groupByLimit, onGroupByLimit)
             }
         }
         SettingsGroup(

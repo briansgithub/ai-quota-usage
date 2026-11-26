@@ -118,6 +118,7 @@ fun DiagnosticsScreen(
                     onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
                     onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
                     onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+                    onGroupByLimit = viewModel::setGroupByLimit,
                     onWidgetBar = viewModel::setWidgetBarVisible,
                     onMoveWidgetSection = viewModel::moveWidgetSection
                 )
