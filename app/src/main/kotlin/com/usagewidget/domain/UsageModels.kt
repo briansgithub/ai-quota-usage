@@ -1,6 +1,7 @@
 package com.usagewidget.domain
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 enum class ProviderId(val wireName: String, val displayName: String) {
     CURSOR("cursor", "Cursor"),
@@ -53,7 +54,12 @@ data class UsageMeter(
     val resetLabel: String? = null,
     val windowStartEpochMs: Long? = null,
     val windowLengthMs: Long? = null,
-    val barKind: MeterBarKind = MeterBarKind.PACE
+    val barKind: MeterBarKind = MeterBarKind.PACE,
+    /**
+     * Display-only: a short window (5-hour) at 100% whose bar was removed by
+     * [UsageRemaining]. Only its reset time is shown. Never persisted.
+     */
+    @Transient val spentShortWindow: Boolean = false
 ) {
     val displayUsedPercent: Int?
         get() = usedPercent?.let { Percent.round(it) }
@@ -184,19 +190,20 @@ data class ManualResets(
     val isPresent: Boolean
         get() = availableCount > 0 || credits.any { it.isAvailable }
 
+    val availableCreditCount: Int
+        get() = if (availableCount > 0) availableCount else credits.count { it.isAvailable }
+
+    fun availableExpiryTimes(): List<Long> =
+        credits.filter { it.isAvailable }.mapNotNull { it.expiresAtEpochMs }.sorted()
+
     fun displayLine(): String? {
-        if (!isPresent) return null
-        val availableCredits = credits.filter { it.isAvailable }
-        val count = if (availableCount > 0) availableCount else availableCredits.size
+        val count = availableCreditCount
         if (count <= 0) return null
         val zone = java.time.ZoneId.of(NyZone.ID)
-        val expiries = availableCredits
-            .mapNotNull { it.expiresAtEpochMs }
-            .sorted()
-            .map { epoch ->
-                val zoned = java.time.Instant.ofEpochMilli(epoch).atZone(zone)
-                "%02d/%02d".format(zoned.monthValue, zoned.dayOfMonth)
-            }
+        val expiries = availableExpiryTimes().map { epoch ->
+            val zoned = java.time.Instant.ofEpochMilli(epoch).atZone(zone)
+            "%02d/%02d".format(zoned.monthValue, zoned.dayOfMonth)
+        }
         return if (expiries.isEmpty()) {
             "Manual resets: $count"
         } else {

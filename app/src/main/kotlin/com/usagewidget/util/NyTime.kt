@@ -61,16 +61,21 @@ object NyTime {
      * The reset line split so a UI can bold only the clock time and the time-left
      * duration: `Reset: Fri ` + **`9 AM`** + ` (` + **`1d 4h`** + `)`.
      */
-    fun formatResetSegments(epochMs: Long, nowMs: Long = System.currentTimeMillis()): List<ResetSegment> {
+    fun formatResetSegments(epochMs: Long, nowMs: Long = System.currentTimeMillis(), label: String = "Reset"): List<ResetSegment> {
         val zoned = Instant.ofEpochMilli(epochMs).atZone(zone)
         val day = zoned.format(weekday)
         return listOf(
-            ResetSegment("Reset: $day ", emphasized = false),
+            ResetSegment("$label: $day ", emphasized = false),
             ResetSegment(formatResetClock(zoned), emphasized = true),
             ResetSegment(" (", emphasized = false),
             ResetSegment(formatResetRelative(epochMs, nowMs), emphasized = true),
             ResetSegment(")", emphasized = false)
         )
+    }
+
+    fun formatResetTime(epochMs: Long): String {
+        val zoned = Instant.ofEpochMilli(epochMs).atZone(zone)
+        return "${zoned.format(weekday)} ${formatResetClock(zoned)}"
     }
 
     fun formatResetClock(zoned: ZonedDateTime): String {

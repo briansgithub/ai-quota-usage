@@ -31,7 +31,12 @@ object WidgetGlanceState {
     fun write(prefs: MutablePreferences, snapshot: UsageSnapshot, nextRefreshAt: Long) {
         prefs[SNAPSHOT_JSON] = encodeSnapshot(snapshot)
         prefs[NEXT_REFRESH_AT] = nextRefreshAt
+        // Display settings live in AppSettings, not here; a fresh stamp on every push makes
+        // the Glance session see a state change and recompose, so settings apply at once.
+        prefs[PUSHED_AT] = System.nanoTime()
     }
+
+    val PUSHED_AT = longPreferencesKey("pushed_at_nanos")
 
     fun snapshotOf(prefs: Preferences): UsageSnapshot? = decodeSnapshot(prefs[SNAPSHOT_JSON])
 

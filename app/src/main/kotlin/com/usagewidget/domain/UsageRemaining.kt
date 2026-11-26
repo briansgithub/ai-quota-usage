@@ -10,8 +10,9 @@ import com.usagewidget.providers.claude.ClaudeMeterIds
  * - A long-window bar (weekly, monthly, 30-day, or a monthly spend cap) at 100% or more
  *   used is hidden, together with every bar of the same model group, so its 5-hour bar
  *   goes too: that one resets, but there is nothing behind it to spend.
- * - A short-window bar (one day or less, e.g. 5-hour) at 100% on its own stays: it
- *   frees up within hours.
+ * - A short-window bar (one day or less, e.g. 5-hour) at 100% on its own loses its bar
+ *   but keeps its software and reset time ([UsageMeter.spentShortWindow]): it frees up
+ *   within hours.
  *
  * Groups per provider:
  * - Claude: Session + Weekly (all models). Weekly spent hides every Claude bar,
@@ -20,7 +21,8 @@ import com.usagewidget.providers.claude.ClaudeMeterIds
  *   ("Name · 5-hour", "Name · Weekly") are their own groups.
  * - Cursor: Models, Other models and On-demand are separate monthly pools, each hidden
  *   alone. There is no 5-hour window.
- * - Grok Bot: Weekly and On-demand, each hidden alone.
+ * - Grok Bot: Weekly and On-demand, each hidden alone. A spent On-demand cap is hidden
+ *   even when its On-demand pill is on.
  *
  * Bars come back on the first refresh after the quota resets below 100%.
  */
@@ -41,7 +43,7 @@ object UsageRemaining {
         return length in 1..SHORT_WINDOW_MAX_MS
     }
 
-    /** Meter ids in [section] to hide because their quota is used up. */
+    /** Meter ids in [section] to hide because their long-window quota is used up. */
     fun spentMeterIds(section: SoftwareSection): Set<String> {
         val bars = section.meters.filter { it.hasUsageBar }
         val blocking = bars.filter { isSpent(it) && !isShortWindow(it) }
@@ -52,9 +54,9 @@ object UsageRemaining {
     }
 
     /**
-     * Drops spent bars when [enabled]. With [dropSpentCards], a card left with no bar
-     * (every one was spent) is dropped too, so the widget only lists services you can use;
-     * the in-app dashboard keeps the card for its sign-in / sign-out buttons.
+     * Drops spent bars when [enabled]; a spent short window becomes a reset-only meter. With
+     * [dropSpentCards], a card left with no bar and no pending short-window reset is dropped
+     * too, so the widget only lists services you can use or will soon.
      */
     fun apply(
         sections: List<SoftwareSection>,
@@ -64,9 +66,22 @@ object UsageRemaining {
         if (!enabled) return sections
         return sections.mapNotNull { section ->
             val spent = spentMeterIds(section)
-            if (spent.isEmpty()) return@mapNotNull section
-            val kept = section.meters.filter { it.id !in spent }
-            if (dropSpentCards && kept.none { it.hasUsageBar }) null else section.copy(meters = kept)
+            var changed = spent.isNotEmpty()
+            val kept = section.meters.mapNotNull { meter ->
+                when {
+                    meter.id in spent -> null
+                    isSpent(meter) && isShortWindow(meter) -> {
+                        changed = true
+                        meter.copy(usedPercent = null, remainingPercent = null, spentShortWindow = true)
+                    }
+                    else -> meter
+                }
+            }
+            when {
+                !changed -> section
+                dropSpentCards && kept.none { it.hasUsageBar || it.spentShortWindow } -> null
+                else -> section.copy(meters = kept)
+            }
         }
     }
 

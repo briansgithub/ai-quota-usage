@@ -7,6 +7,19 @@ import org.junit.Test
 
 class UsedGradientTest {
     @Test
+    fun onlyShortWindowsReverseThePaceGradient() {
+        val short = UsageMeter(id = "openai.five_hour", title = "Session")
+        val long = short.copy(id = "openai.weekly")
+        for (used in listOf(25.0, 40.0, 50.0, 60.0, 75.0, 100.0)) {
+            assertEquals(UsedGradient.fill(100.0 - used, 50.0), UsedGradient.meterFill(short, used, 50.0))
+            assertEquals(UsedGradient.fill(used, 50.0), UsedGradient.meterFill(long, used, 50.0))
+        }
+        assertEquals(UsedGradient.MID, UsedGradient.meterFill(short, 100.0, 100.0))
+        assertEquals(UsedGradient.MID, UsedGradient.meterFill(short, 65.0, null))
+        assertEquals(UsedGradient.capFill(40.0), UsedGradient.meterFill(short.copy(barKind = MeterBarKind.CAP), 40.0, 50.0))
+    }
+
+    @Test
     fun onPaceIsPaleBehindIsRedAheadIsGreen() {
         val on = UsedGradient.fill(50.0, 50.0)
         val behind = UsedGradient.fill(25.0, 50.0)
