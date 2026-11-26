@@ -246,6 +246,14 @@ class AppSettings private constructor(context: Context) {
             publishDisplay()
         }
 
+    /** With [onlyUsageRemaining]: keep reset times for the models it hides (see [com.usagewidget.domain.UsageRemaining]). */
+    var keepResetTimes: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_RESET_TIMES, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_KEEP_RESET_TIMES, value).apply()
+            publishDisplay()
+        }
+
     /** Widget only: group bars by limit length, then by software (see [com.usagewidget.domain.LimitGrouping]). */
     var groupByLimit: Boolean
         get() = prefs.getBoolean(KEY_GROUP_BY_LIMIT, false)
@@ -360,6 +368,7 @@ class AppSettings private constructor(context: Context) {
         hiddenWidgetBars = hiddenWidgetBars,
         widgetSectionOrder = widgetSectionOrder,
         onlyUsageRemaining = onlyUsageRemaining,
+        keepResetTimes = keepResetTimes,
         groupByLimit = groupByLimit
     )
 
@@ -400,6 +409,7 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_HIDDEN_WIDGET_BARS = "hidden_widget_bars"
         private const val KEY_WIDGET_SECTION_ORDER = "widget_section_order"
         private const val KEY_ONLY_USAGE_REMAINING = "only_usage_remaining"
+        private const val KEY_KEEP_RESET_TIMES = "keep_reset_times"
         private const val KEY_GROUP_BY_LIMIT = "group_by_limit"
         private const val KEY_QUOTA_CLAUDE_FIVE = "quota_claude_five_hour_enabled"
         private const val KEY_QUOTA_CLAUDE_WEEKLY = "quota_claude_weekly_enabled"

@@ -25,6 +25,8 @@ data class DisplayPreferences(
     val widgetSectionOrder: List<SoftwareSectionId> = WidgetBars.defaultSectionOrder,
     /** Hide bars with no quota left, in the app and on the widget (see [UsageRemaining]). */
     val onlyUsageRemaining: Boolean = false,
+    /** With [onlyUsageRemaining]: hidden spent models still list their reset times on the widget. */
+    val keepResetTimes: Boolean = false,
     /** Widget layout: group bars by limit length (5-hr / weekly+monthly), then software (see [LimitGrouping]). */
     val groupByLimit: Boolean = false
 )
@@ -56,8 +58,9 @@ data class UsageMeter(
     val windowLengthMs: Long? = null,
     val barKind: MeterBarKind = MeterBarKind.PACE,
     /**
-     * Display-only: a short window (5-hour) at 100% whose bar was removed by
-     * [UsageRemaining]. Only its reset time is shown. Never persisted.
+     * Display-only: a meter at 100% whose bar was removed by [UsageRemaining] (a short
+     * window, or any spent window when "keep reset times" is on). Only its reset time is
+     * shown. Never persisted.
      */
     @Transient val spentShortWindow: Boolean = false
 ) {

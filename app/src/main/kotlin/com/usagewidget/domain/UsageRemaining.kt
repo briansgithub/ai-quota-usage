@@ -24,6 +24,11 @@ import com.usagewidget.providers.claude.ClaudeMeterIds
  * - Grok Bot: Weekly and On-demand, each hidden alone. A spent On-demand cap is hidden
  *   even when its On-demand pill is on.
  *
+ * With [apply]'s `keepResetTimes`, a hidden group still lists its blocking long-window
+ * meters (the ones at 100%) as reset-only rows, so the widget shows when the model returns.
+ * The group's other bars, including its 5-hour one, stay hidden: they free up first but
+ * there is nothing behind them to spend.
+ *
  * Bars come back on the first refresh after the quota resets below 100%.
  */
 object UsageRemaining {
@@ -57,11 +62,15 @@ object UsageRemaining {
      * Drops spent bars when [enabled]; a spent short window becomes a reset-only meter. With
      * [dropSpentCards], a card left with no bar and no pending short-window reset is dropped
      * too, so the widget only lists services you can use or will soon.
+     *
+     * With [keepResetTimes], a spent long-window meter that has a reset time becomes a
+     * reset-only meter too, instead of vanishing, and keeps its card alive.
      */
     fun apply(
         sections: List<SoftwareSection>,
         enabled: Boolean,
-        dropSpentCards: Boolean
+        dropSpentCards: Boolean,
+        keepResetTimes: Boolean = false
     ): List<SoftwareSection> {
         if (!enabled) return sections
         return sections.mapNotNull { section ->
@@ -69,7 +78,11 @@ object UsageRemaining {
             var changed = spent.isNotEmpty()
             val kept = section.meters.mapNotNull { meter ->
                 when {
-                    meter.id in spent -> null
+                    meter.id in spent -> {
+                        if (keepResetTimes && isSpent(meter) && meter.resetsAtEpochMs != null) {
+                            meter.copy(usedPercent = null, remainingPercent = null, spentShortWindow = true)
+                        } else null
+                    }
                     isSpent(meter) && isShortWindow(meter) -> {
                         changed = true
                         meter.copy(usedPercent = null, remainingPercent = null, spentShortWindow = true)

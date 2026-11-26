@@ -54,6 +54,7 @@ fun DisplaySettings(
     onShowCursorOnDemand: (Boolean) -> Unit,
     onShowGrokOnDemand: (Boolean) -> Unit,
     onOnlyUsageRemaining: (Boolean) -> Unit,
+    onKeepResetTimes: (Boolean) -> Unit,
     onGroupByLimit: (Boolean) -> Unit,
     onWidgetBar: (meterId: String, visible: Boolean) -> Unit,
     onMoveWidgetSection: (section: SoftwareSectionId, delta: Int) -> Unit,
@@ -71,7 +72,7 @@ fun DisplaySettings(
         }
         SettingsGroup(
             title = "Usage left",
-            hint = "Hide bars with weekly or monthly quota used up, and that model's 5-hour bar. On-demand bars follow their own toggle."
+            hint = "Hide bars with weekly or monthly quota used up, and that model's 5-hour bar. On-demand bars follow their own toggle. Keep reset times still shows when those hidden models come back."
         ) {
             ChipRow {
                 ToggleChip(
@@ -80,6 +81,12 @@ fun DisplaySettings(
                     onChange = onOnlyUsageRemaining,
                     onIcon = Icons.Outlined.FilterAlt,
                     offIcon = Icons.Outlined.FilterAltOff
+                )
+                ToggleChip(
+                    label = "Keep reset times",
+                    selected = display.onlyUsageRemaining && display.keepResetTimes,
+                    enabled = display.onlyUsageRemaining,
+                    onChange = onKeepResetTimes
                 )
             }
         }

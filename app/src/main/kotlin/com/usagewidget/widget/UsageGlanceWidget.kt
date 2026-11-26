@@ -230,7 +230,8 @@ internal fun widgetRowsFor(
             display.widgetSectionOrder
         ),
         enabled = display.onlyUsageRemaining,
-        dropSpentCards = true
+        dropSpentCards = true,
+        keepResetTimes = display.keepResetTimes
     )
     return widgetRows(sections, nowMs, display.groupByLimit, pacingSections = usage, rates = rates)
 }
@@ -311,7 +312,7 @@ private fun MutableList<WidgetRow>.addSection(
     val manual = if (showManual) section.manualResets?.widgetLine() else null
     val plan = if (primary) {
         section.meters.firstOrNull { it.id == "cursor.plan_reset" }?.resetsAtEpochMs?.takeUnless { at ->
-            section.meters.any { it.hasUsageBar && it.resetsAtEpochMs == at }
+            section.meters.any { (it.hasUsageBar || it.spentShortWindow) && it.resetsAtEpochMs == at }
         }
     } else null
     val softwareHeading = meters.size > 1 || names.any { it.startsWith("3rd-party") } || meters.any { it.spentShortWindow } ||

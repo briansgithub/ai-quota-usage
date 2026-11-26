@@ -153,6 +153,7 @@ fun DashboardScreen(
                         onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
                         onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
                         onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+                        onKeepResetTimes = viewModel::setKeepResetTimes,
                         onGroupByLimit = viewModel::setGroupByLimit,
                         onWidgetBar = viewModel::setWidgetBarVisible,
                         onMoveWidgetSection = viewModel::moveWidgetSection
