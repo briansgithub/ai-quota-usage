@@ -2,6 +2,7 @@ package com.usagewidget.domain
 
 import com.usagewidget.providers.claude.ClaudeMeterIds
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -70,9 +71,24 @@ class UsageRemainingTest {
     }
 
     @Test
-    fun spentFiveHourAloneStays() {
-        val s = section(SoftwareSectionId.CODEX, meter("openai.five_hour", 100.0), meter("openai.weekly", 40.0))
-        assertSame(s, shown(s).single())
+    fun spentFiveHourLosesItsBarButKeepsItsReset() {
+        val s = section(
+            SoftwareSectionId.CODEX,
+            meter("openai.five_hour", 100.0).copy(resetsAtEpochMs = 42L, windowLengthMs = 5L * 3600_000),
+            meter("openai.weekly", 40.0)
+        )
+        val five = shown(s).single().meters.first { it.id == "openai.five_hour" }
+        assertTrue(five.spentShortWindow)
+        assertFalse(five.hasUsageBar)
+        assertEquals(42L, five.resetsAtEpochMs)
+        assertEquals(5L * 3600_000, five.windowLengthMs)
+    }
+
+    @Test
+    fun cardWithOnlyASpentFiveHourStaysForItsReset() {
+        val s = section(SoftwareSectionId.CLAUDE, meter(ClaudeMeterIds.FIVE_HOUR, 100.0).copy(resetsAtEpochMs = 7L))
+        val claude = shown(s).single()
+        assertTrue(claude.meters.single().spentShortWindow)
     }
 
     @Test
@@ -127,10 +143,26 @@ class UsageRemainingTest {
             SoftwareSectionId.CURSOR,
             meter("cursor.models", 100.0),
             meter("cursor.other", 101.0),
-            meter("cursor.on_demand", 100.0, cap = true),
+            meter("cursor.on_demand", 100.2, cap = true),
             UsageMeter(id = "cursor.plan_reset", title = "Plan reset", resetsAtEpochMs = 5L)
         )
         assertTrue(shown(s).isEmpty())
+    }
+
+    @Test
+    fun spentOnDemandCapsAreHidden() {
+        val grok = section(
+            SoftwareSectionId.GROK_BOT,
+            meter(MeterIds.GROK, 100.0),
+            meter(MeterIds.GROK_ON_DEMAND, 100.2, cap = true)
+        )
+        assertTrue(shown(grok).isEmpty())
+        val cursor = section(
+            SoftwareSectionId.CURSOR,
+            meter("cursor.models", 40.0),
+            meter("cursor.on_demand", 100.2, cap = true)
+        )
+        assertEquals(listOf("cursor.models"), ids(shown(cursor), SoftwareSectionId.CURSOR))
     }
 
     @Test

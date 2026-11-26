@@ -71,7 +71,7 @@ fun DisplaySettings(
         }
         SettingsGroup(
             title = "Usage left",
-            hint = "Hide bars with weekly or monthly quota used up, and that model's 5-hour bar. In the app and on the widget."
+            hint = "Hide bars with weekly or monthly quota used up, and that model's 5-hour bar. On-demand bars follow their own toggle."
         ) {
             ChipRow {
                 ToggleChip(

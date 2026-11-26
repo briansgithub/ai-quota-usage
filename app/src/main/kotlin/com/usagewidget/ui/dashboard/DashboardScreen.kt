@@ -1,34 +1,29 @@
 package com.usagewidget.ui.dashboard
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -43,11 +38,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -55,46 +52,40 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.usagewidget.R
-import com.usagewidget.domain.DisplayPreferences
 import com.usagewidget.domain.NyTimeAgo
-import com.usagewidget.domain.OnDemandDisplay
-import com.usagewidget.domain.UsageRemaining
-import com.usagewidget.ui.settings.DisplaySettings
 import com.usagewidget.domain.PaceWindows
-import com.usagewidget.domain.PacingPlanner
-import com.usagewidget.domain.PaceUrgency
+import com.usagewidget.domain.PacingPolicy
 import com.usagewidget.domain.ProviderId
-import com.usagewidget.domain.UsedGradient
 import com.usagewidget.domain.ProviderStatus
 import com.usagewidget.domain.RefreshSchedule
 import com.usagewidget.domain.ResetEmphasis
-import com.usagewidget.domain.ResetSegmentLook
 import com.usagewidget.domain.ResetUrgency
 import com.usagewidget.domain.SoftwareSection
 import com.usagewidget.domain.SoftwareSectionId
 import com.usagewidget.domain.StaleSeverity
-import com.usagewidget.domain.UsageMeter
 import com.usagewidget.domain.UsageSections
 import com.usagewidget.domain.UsageSnapshot
+import com.usagewidget.ui.settings.DisplaySettings
 import com.usagewidget.ui.theme.CursorBar
-import com.usagewidget.ui.theme.CursorBarWarn
 import com.usagewidget.ui.theme.CursorChrome
 import com.usagewidget.ui.theme.CursorMuted
 import com.usagewidget.ui.theme.CursorSurface
 import com.usagewidget.ui.theme.CursorText
-import com.usagewidget.ui.theme.CursorTrack
-import com.usagewidget.ui.theme.ResetAmber
-import com.usagewidget.ui.theme.ResetBright
-import com.usagewidget.ui.theme.ResetImminent
 import com.usagewidget.ui.theme.StaleAmber
 import com.usagewidget.ui.theme.StaleAmberBg
 import com.usagewidget.ui.theme.StaleRed
 import com.usagewidget.ui.theme.StaleRedBg
 import com.usagewidget.util.NyTime
-import com.usagewidget.util.ResetSegment
+import com.usagewidget.widget.PaceBarBitmap
+import com.usagewidget.widget.WidgetRow
+import com.usagewidget.widget.widgetRowsFor
 import kotlinx.coroutines.delay
 
+/**
+ * One page: widget settings first, then a live preview of the home-screen widget built from
+ * the same rows ([widgetRowsFor]) and bar renderer ([PaceBarBitmap]), so every visibility,
+ * order, usage-left and group-by-limit setting shows here exactly as on the widget.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -110,10 +101,13 @@ fun DashboardScreen(
     val alerts by viewModel.alertPreferences.collectAsStateWithLifecycle()
     val display by viewModel.displayPreferences.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
+    // The widget's gear opens the app with settingsOpen: settings are at the top of the page.
     LaunchedEffect(settingsOpen) {
-        if (settingsOpen) scroll.scrollTo(0)
+        if (settingsOpen) {
+            scroll.scrollTo(0)
+            onSettingsChange(false)
+        }
     }
-    BackHandler(enabled = settingsOpen) { onSettingsChange(false) }
 
     Scaffold(
         containerColor = CursorChrome,
@@ -124,8 +118,8 @@ fun DashboardScreen(
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Outlined.Refresh, contentDescription = "Refresh")
                     }
-                    IconButton(onClick = { onSettingsChange(!settingsOpen) }) {
-                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.settings))
+                    IconButton(onClick = onOpenDiagnostics) {
+                        Icon(Icons.Outlined.NotificationsNone, contentDescription = "Alerts and diagnostics")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -143,364 +137,256 @@ fun DashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            DashboardBody(
-                snapshot = snapshot,
-                nextRefreshAtEpochMs = nextRefreshAt,
-                percentPerWindow = alerts.percentPerWindow,
-                display = display,
-                onSignIn = onSignIn,
-                onSignOut = { viewModel.signOut(it) },
-                scroll = scroll
+            val now = System.currentTimeMillis()
+            val sections = UsageSections.from(snapshot, now)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scroll)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (settingsOpen) {
-                    Column(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CursorSurface).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Widget settings", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, color = CursorText)
-                            TextButton(onClick = { onSettingsChange(false) }) { Text("Done") }
-                        }
-                        TextButton(onClick = onOpenDiagnostics) { Text("Alerts and diagnostics") }
-                        DisplaySettings(
-                            display = display,
-                            onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
-                            onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
-                            onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
-                            onGroupByLimit = viewModel::setGroupByLimit,
-                            onWidgetBar = viewModel::setWidgetBarVisible,
-                            onMoveWidgetSection = viewModel::moveWidgetSection
-                        )
-                    }
+                Card {
+                    Text("Widget settings", style = MaterialTheme.typography.titleLarge, color = CursorText)
+                    DisplaySettings(
+                        display = display,
+                        onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
+                        onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
+                        onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
+                        onGroupByLimit = viewModel::setGroupByLimit,
+                        onWidgetBar = viewModel::setWidgetBarVisible,
+                        onMoveWidgetSection = viewModel::moveWidgetSection
+                    )
+                    Accounts(sections, onSignIn = onSignIn, onSignOut = { viewModel.signOut(it) })
+                    TextButton(onClick = onOpenDiagnostics) { Text("Alerts and diagnostics") }
                 }
+                StatusLines(snapshot, sections, nextRefreshAt, now)
+                Text(
+                    "WIDGET PREVIEW",
+                    color = CursorBar,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.8.sp
+                )
+                WidgetPreview(
+                    rows = widgetRowsFor(snapshot, display, alerts.percentPerWindow, now),
+                    nowMs = now,
+                    onSignIn = { wire -> ProviderId.entries.firstOrNull { it.wireName == wire }?.let(onSignIn) }
+                )
+                Text(
+                    text = "Numbers come from each site’s own usage page using your sign-in cookie. Endpoints are undocumented and can break.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CursorMuted
+                )
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
 @Composable
-private fun DashboardBody(
-    snapshot: UsageSnapshot,
-    nextRefreshAtEpochMs: Long,
-    percentPerWindow: Double,
-    display: DisplayPreferences,
+private fun Card(content: @Composable () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(CursorSurface).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) { content() }
+}
+
+/** One row per sign-in (Grok Bot shares Cursor's), with the buttons the old cards had. */
+@Composable
+private fun Accounts(
+    sections: List<SoftwareSection>,
     onSignIn: (ProviderId) -> Unit,
-    onSignOut: (ProviderId) -> Unit,
-    scroll: ScrollState,
-    settings: @Composable () -> Unit
+    onSignOut: (ProviderId) -> Unit
 ) {
-    val now = System.currentTimeMillis()
-    val sections = UsageRemaining.apply(
-        OnDemandDisplay.apply(
-            UsageSections.from(snapshot, now),
-            showCursor = display.showCursorOnDemand,
-            showGrok = display.showGrokOnDemand
-        ),
-        enabled = display.onlyUsageRemaining,
-        dropSpentCards = false
-    )
-    val anyStale = sections.any { it.stale.isStale }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scroll)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        settings()
-        if (anyStale) {
-            val worst = sections.filter { it.stale.isStale }
-                .maxBy { if (it.stale.severity == StaleSeverity.RED) 1 else 0 }
-            StaleBanner(
-                text = "Stale data on ${worst.id.title}" +
-                    (worst.stale.shortReason?.let { " · $it" } ?: ""),
-                severity = worst.stale.severity
-            )
-        }
-        Text(
-            text = lastUpdatedLine(snapshot.fetchedAtEpochMs, now),
-            style = MaterialTheme.typography.bodySmall,
-            color = CursorMuted
-        )
-        NextRefreshLabel(nextRefreshAtEpochMs)
-        Text(
-            text = "Background refresh every 15 minutes.",
-            style = MaterialTheme.typography.bodySmall,
-            color = CursorMuted.copy(alpha = 0.55f)
-        )
-        sections.forEach { section ->
-            Spacer(Modifier.height(16.dp))
-            SectionCard(
-                section = section,
-                nowMs = now,
-                percentPerWindow = percentPerWindow,
-                onSignIn = { onSignIn(section.signInProvider) },
-                onSignOut = { onSignOut(section.signInProvider) }
-            )
-        }
-        Text(
-            text = "Numbers come from each site’s own usage page using your sign-in cookie. Endpoints are undocumented and can break.",
-            style = MaterialTheme.typography.bodySmall,
-            color = CursorMuted
-        )
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun StaleBanner(text: String, severity: StaleSeverity) {
-    val tint = if (severity == StaleSeverity.RED) StaleRed else StaleAmber
-    val bg = if (severity == StaleSeverity.RED) StaleRedBg else StaleAmberBg
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(bg)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(Icons.Outlined.Warning, contentDescription = null, tint = tint)
-        Text(text, color = tint, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-private fun SectionCard(
-    section: SoftwareSection,
-    nowMs: Long,
-    percentPerWindow: Double,
-    onSignIn: () -> Unit,
-    onSignOut: () -> Unit
-) {
-    val stale = section.stale
-    val headerColor = staleHeaderColor(stale.severity, stale.isStale)
-    val cardBg = when {
-        !stale.isStale -> CursorSurface
-        stale.severity == StaleSeverity.RED -> StaleRedBg
-        else -> StaleAmberBg
-    }
-    val hasData = section.meters.any { it.hasUsageBar || it.resetsAtEpochMs != null }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(cardBg)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (stale.isStale) {
-                Icon(
-                    Icons.Outlined.Warning,
-                    contentDescription = "Stale",
-                    tint = headerColor,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    section.id.title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 22.sp
-                    ),
-                    color = headerColor
-                )
-                if (!section.subtitle.isNullOrBlank() && !stale.isStale) {
-                    Text(section.subtitle, style = MaterialTheme.typography.bodySmall, color = CursorMuted)
-                }
-                if (stale.isStale) {
-                    val line = listOfNotNull(stale.lastUpdatedLine, stale.shortReason).joinToString(" · ")
-                    Text(line, style = MaterialTheme.typography.bodySmall, color = headerColor)
-                }
-            }
-        }
-
-        if (hasData) {
-            section.meters.forEach { MeterRow(it, nowMs = nowMs, stale = stale.isStale) }
-        }
-        section.manualResets?.displayLine()?.let { line ->
-            Text(line, color = CursorText, style = MaterialTheme.typography.bodyMedium)
-        }
-        val pacing = PacingPlanner.forSection(section, nowMs, percentPerWindow)
-        if (pacing != null) {
-            Text(
-                pacing.line,
-                color = paceColor(pacing.urgency),
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-            )
-            pacing.manuals.mapNotNull { it.warning }.forEach { warning ->
-                Text(
-                    warning,
-                    color = ResetImminent,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-        }
-
-        when (section.status) {
-            ProviderStatus.UNSIGNED, ProviderStatus.NEEDS_SIGN_IN -> {
-                if (!hasData) {
-                    Text(
-                        section.error ?: "Sign in on this phone. The app never sees your password.",
-                        color = CursorMuted,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                Button(onClick = onSignIn, colors = ButtonDefaults.buttonColors(containerColor = CursorBar)) {
-                    Text(
-                        if (section.status == ProviderStatus.NEEDS_SIGN_IN) {
-                            "Sign in again"
-                        } else {
-                            signInLabel(section)
-                        }
-                    )
-                }
-            }
-            ProviderStatus.LOADING -> {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-            ProviderStatus.ERROR -> {
-                if (!hasData) {
-                    Text(section.error ?: "Could not load usage.", color = CursorBarWarn)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onSignIn) { Text("Sign in again") }
-                    if (section.id != SoftwareSectionId.GROK_BOT) {
-                        OutlinedButton(onClick = onSignOut) { Text("Sign out") }
-                    }
-                }
-            }
-            ProviderStatus.OK -> {
-                if (!section.error.isNullOrBlank() && !stale.isStale) {
-                    Text(section.error, color = CursorBarWarn, style = MaterialTheme.typography.bodySmall)
-                }
-                if (section.id != SoftwareSectionId.GROK_BOT) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onSignIn) { Text("Re-auth") }
-                        OutlinedButton(onClick = onSignOut) { Text("Sign out") }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun MeterRow(meter: UsageMeter, nowMs: Long = System.currentTimeMillis(), stale: Boolean = false) {
-    val used = meter.usedLabel()
-    val reset = meter.resetsAtEpochMs?.let { NyTime.formatResetSegments(it, nowMs) }
-        ?: meter.resetLabel?.let { listOf(ResetSegment(it, emphasized = false)) }
-    val titleColor = if (stale) CursorMuted else CursorText
+    val byProvider = sections.filter { it.id != SoftwareSectionId.GROK_BOT }.associateBy { it.signInProvider }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                meter.title,
-                color = titleColor,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge
-            )
-            if (used != null) {
-                Text(used, color = CursorText, style = MaterialTheme.typography.bodyMedium)
-            } else if (!reset.isNullOrEmpty() && !meter.hasUsageBar) {
-                ResetText(reset, meter.resetsAtEpochMs, nowMs)
+        Text(
+            "ACCOUNTS",
+            color = CursorBar,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp
+        )
+        byProvider.forEach { (provider, section) ->
+            val signedIn = section.status != ProviderStatus.UNSIGNED && section.status != ProviderStatus.NEEDS_SIGN_IN
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(accountName(provider), color = CursorText, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        accountStatus(section),
+                        color = if (section.status == ProviderStatus.OK) CursorMuted else StaleAmber,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1
+                    )
+                }
+                OutlinedButton(onClick = { onSignIn(provider) }, modifier = Modifier.heightIn(min = 36.dp)) {
+                    Text(if (signedIn) "Re-auth" else "Sign in")
+                }
+                if (signedIn) {
+                    OutlinedButton(onClick = { onSignOut(provider) }, modifier = Modifier.heightIn(min = 36.dp)) {
+                        Text("Sign out")
+                    }
+                }
             }
         }
-        if (meter.hasUsageBar) {
-            UsageBar(meter = meter, nowMs = nowMs)
-        }
-        if (used != null && !reset.isNullOrEmpty()) {
-            ResetText(reset, meter.resetsAtEpochMs, nowMs)
-        }
     }
 }
 
+private fun accountName(provider: ProviderId): String = when (provider) {
+    ProviderId.CURSOR -> "Cursor + Grok Bot"
+    ProviderId.OPENAI -> "Codex (ChatGPT)"
+    ProviderId.CLAUDE -> "Claude"
+    ProviderId.GEMINI -> "Gemini (Antigravity)"
+}
+
+private fun accountStatus(section: SoftwareSection): String = when (section.status) {
+    ProviderStatus.OK -> listOfNotNull("Signed in", section.subtitle).joinToString(" · ")
+    ProviderStatus.UNSIGNED -> "Not signed in"
+    ProviderStatus.NEEDS_SIGN_IN -> "Sign-in expired"
+    ProviderStatus.LOADING -> "Loading…"
+    ProviderStatus.ERROR -> section.error ?: "Could not load usage"
+}
+
 @Composable
-fun UsageBar(meter: UsageMeter, nowMs: Long) {
-    val used = (meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: 0.0).coerceIn(0.0, 100.0)
-    val expected = if (meter.isCapBar) null else PaceWindows.expectedUsedPercent(meter, nowMs)
-    val fill = UsedGradient.meterFill(meter, used, expected)
-    val fillColor = Color(red = fill.r / 255f, green = fill.g / 255f, blue = fill.b / 255f)
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(8.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(CursorTrack)
+private fun StatusLines(snapshot: UsageSnapshot, sections: List<SoftwareSection>, nextRefreshAt: Long, now: Long) {
+    val stale = sections.filter { it.stale.isStale }
+    if (stale.isNotEmpty()) {
+        val worst = stale.maxBy { if (it.stale.severity == StaleSeverity.RED) 1 else 0 }
+        val red = worst.stale.severity == StaleSeverity.RED
+        Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(if (red) StaleRedBg else StaleAmberBg).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val tint = if (red) StaleRed else StaleAmber
+            Icon(Icons.Outlined.Warning, contentDescription = null, tint = tint)
+            Text(
+                "Stale data on ${worst.id.title}" + (worst.stale.shortReason?.let { " · $it" } ?: ""),
+                color = tint,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            if (snapshot.fetchedAtEpochMs <= 0L) "Not updated yet"
+            else "Updated ${NyTimeAgo.format(snapshot.fetchedAtEpochMs, now)} · ${NyTime.formatAbsolute(snapshot.fetchedAtEpochMs)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = CursorMuted
+        )
+        NextRefreshLabel(nextRefreshAt)
+    }
+}
+
+private val WidgetChrome = Color(0xFF141414)
+private val WidgetSurface = Color(0xFF1A1A1A)
+private val WidgetText = Color(0xFFE8E8E8)
+private val WidgetMuted = Color(0xFF9A9A9A)
+private val WidgetWarn = Color(0xFFE08B6E)
+private val WidgetAmber = Color(0xFFE6B84C)
+private val WidgetOrange = Color(0xFFFF8A65)
+private val WidgetBright = Color(0xFFF5F5F5)
+
+/** Compose mirror of the Glance widget's row rendering in [com.usagewidget.widget.UsageGlanceWidget]. */
+@Composable
+private fun WidgetPreview(rows: List<WidgetRow>, nowMs: Long, onSignIn: (String) -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(WidgetChrome).padding(12.dp)
     ) {
-        if (used > 0.0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth((used / 100.0).toFloat())
-                    .fillMaxHeight()
-                    .background(fillColor)
-            )
-        }
-        if (!meter.isCapBar && expected != null) {
-            val tickX = (maxWidth * (expected.coerceIn(0.0, 100.0) / 100.0).toFloat() - 1.dp)
-                .coerceIn(0.dp, (maxWidth - 2.dp).coerceAtLeast(0.dp))
-            Box(
-                modifier = Modifier
-                    .offset(x = tickX)
-                    .width(2.dp)
-                    .fillMaxHeight()
-                    .background(Color(0xFFF5F5F5))
-            )
+        Text("Quota used", color = WidgetMuted, fontSize = 12.sp)
+        Spacer(Modifier.height(6.dp))
+        rows.forEach { row ->
+            when (row) {
+                is WidgetRow.Heading -> Text(
+                    row.title,
+                    modifier = Modifier.padding(top = if (row.software) 1.dp else 4.dp),
+                    color = WidgetBright,
+                    fontSize = if (row.software) 12.sp else 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                is WidgetRow.Meter -> PreviewMeter(row, nowMs)
+                is WidgetRow.Reset -> PreviewReset(row, nowMs)
+                is WidgetRow.Manual -> Text(
+                    row.text,
+                    modifier = Modifier.padding(start = if (row.indented) 8.dp else 0.dp),
+                    color = WidgetMuted,
+                    fontSize = 11.sp
+                )
+                is WidgetRow.SignIn -> Text(
+                    "${row.title} · Sign in",
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(WidgetSurface)
+                        .clickable { onSignIn(row.providerId) }.padding(8.dp),
+                    color = WidgetWarn,
+                    fontSize = 12.sp
+                )
+                is WidgetRow.Message -> Text(row.text, color = WidgetMuted, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(if (row is WidgetRow.Meter) 3.dp else 5.dp))
         }
     }
 }
 
-/** Only the clock time and duration take the urgency colour, size and bold. */
 @Composable
-private fun ResetText(segments: List<ResetSegment>, resetAtEpochMs: Long?, nowMs: Long) {
-    val urgency = ResetEmphasis.of(resetAtEpochMs, nowMs)
+private fun PreviewMeter(row: WidgetRow.Meter, nowMs: Long) {
+    Column(Modifier.fillMaxWidth().padding(start = if (row.indented) 8.dp else 0.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(row.title, color = WidgetText, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            row.slackMs?.let { slack ->
+                val label = if (slack < 0) "short" else "slack"
+                val color = when {
+                    slack <= PacingPolicy.CRITICAL_SLACK_MS -> WidgetOrange
+                    slack <= PacingPolicy.TIGHT_SLACK_MS -> WidgetAmber
+                    else -> WidgetMuted
+                }
+                Text("${NyTime.formatDuration(slack)} $label", color = color, fontSize = 11.sp, modifier = Modifier.padding(end = 8.dp))
+            }
+            Text(
+                (if (row.stale) "~" else "") + "${row.meter.displayUsedPercent}%",
+                color = if (row.stale) WidgetAmber else WidgetText,
+                fontSize = 13.sp
+            )
+        }
+        Spacer(Modifier.height(2.dp))
+        BoxWithConstraints(Modifier.fillMaxWidth().height(7.dp)) {
+            val density = LocalDensity.current
+            val widthPx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(8)
+            val heightPx = with(density) { 7.dp.roundToPx() }.coerceAtLeast(4)
+            val meter = row.meter
+            val used = meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: 0.0
+            val expected = if (meter.isCapBar) null else PaceWindows.expectedUsedPercent(meter, nowMs)
+            val bitmap = remember(meter, expected, widthPx, heightPx) {
+                PaceBarBitmap.render(used, expected, widthPx, heightPx, meter).asImageBitmap()
+            }
+            Image(bitmap, contentDescription = meter.usedLabel(), modifier = Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+        }
+    }
+}
+
+@Composable
+private fun PreviewReset(row: WidgetRow.Reset, now: Long) {
+    val urgency = ResetEmphasis.of(row.at, now)
+    val tint = when (urgency) {
+        ResetUrgency.RELAXED -> WidgetText
+        ResetUrgency.SOON -> WidgetBright
+        ResetUrgency.NEAR -> WidgetAmber
+        ResetUrgency.IMMINENT -> WidgetOrange
+    }
+    val time = NyTime.formatResetTime(row.at)
     Text(
         buildAnnotatedString {
-            for (segment in segments) {
-                val look = ResetSegmentLook.of(segment.emphasized, urgency)
-                withStyle(
-                    SpanStyle(
-                        color = resetColor(look.urgency),
-                        fontWeight = if (look.bold) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = if (look.enlarged) 14.sp else 13.sp
-                    )
-                ) { append(segment.text) }
-            }
+            withStyle(SpanStyle(color = WidgetMuted, fontSize = 11.sp)) { append(row.label?.let { "$it $time" } ?: time) }
+            withStyle(
+                SpanStyle(
+                    color = tint,
+                    fontSize = if (urgency == ResetUrgency.IMMINENT) 12.sp else 11.sp,
+                    fontWeight = if (urgency == ResetUrgency.RELAXED) FontWeight.Normal else FontWeight.Bold
+                )
+            ) { append("  ${NyTime.formatResetRelative(row.at, now)}") }
         },
-        style = MaterialTheme.typography.bodyMedium
+        modifier = Modifier.padding(start = if (row.indented) 8.dp else 0.dp)
     )
-}
-
-private fun resetColor(urgency: ResetUrgency): Color = when (urgency) {
-    ResetUrgency.RELAXED -> CursorText
-    ResetUrgency.SOON -> ResetBright
-    ResetUrgency.NEAR -> ResetAmber
-    ResetUrgency.IMMINENT -> ResetImminent
-}
-
-private fun paceColor(urgency: PaceUrgency): Color = when (urgency) {
-    PaceUrgency.OK -> CursorText
-    PaceUrgency.TIGHT -> ResetAmber
-    PaceUrgency.CRITICAL, PaceUrgency.IMPOSSIBLE -> ResetImminent
-}
-
-private fun staleHeaderColor(severity: StaleSeverity, isStale: Boolean): Color {
-    if (!isStale) return CursorText
-    return if (severity == StaleSeverity.RED) StaleRed else StaleAmber
-}
-
-private fun signInLabel(section: SoftwareSection): String = when (section.id) {
-    SoftwareSectionId.GROK_BOT -> "Sign in to Cursor"
-    SoftwareSectionId.CODEX -> "Sign in to ChatGPT"
-    SoftwareSectionId.CLAUDE -> "Sign in to Claude"
-    SoftwareSectionId.GEMINI -> "Sign in with Google (Antigravity)"
-    SoftwareSectionId.CURSOR -> "Sign in"
-}
-
-private fun lastUpdatedLine(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
-    if (epochMs <= 0L) return "Not updated yet"
-    return "Updated ${NyTimeAgo.format(epochMs, nowMs)} · ${NyTime.formatAbsolute(epochMs)}"
 }
 
 @Composable

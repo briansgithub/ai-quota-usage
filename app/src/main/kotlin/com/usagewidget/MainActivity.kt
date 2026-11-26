@@ -108,6 +108,15 @@ class MainActivity : ComponentActivity() {
         viewModel.refresh()
     }
 
+    /** Leaving the app: make sure the home-screen widget shows the latest settings. */
+    override fun onStop() {
+        super.onStop()
+        val app = applicationContext
+        lifecycleScope.launch {
+            runCatching { com.usagewidget.widget.WidgetPublisher.push(app) }
+        }
+    }
+
     private fun maybeOpenLoginFromIntent() {
         val provider = intent.getStringExtra(EXTRA_SIGN_IN_PROVIDER) ?: return
         intent.removeExtra(EXTRA_SIGN_IN_PROVIDER)

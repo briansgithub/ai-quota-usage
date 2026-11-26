@@ -49,6 +49,7 @@ import com.usagewidget.R
 import com.usagewidget.MainActivity
 import com.usagewidget.data.AppSettings
 import com.usagewidget.data.UsageRepository
+import com.usagewidget.domain.DisplayPreferences
 import com.usagewidget.domain.LimitGrouping
 import com.usagewidget.domain.ManualResets
 import com.usagewidget.domain.NyTimeAgo
@@ -86,6 +87,7 @@ class UsageGlanceWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
             val prefs = currentState<Preferences>()
+            prefs[WidgetGlanceState.PUSHED_AT] // read so each push (settings change) recomposes
             val snapshot = WidgetGlanceState.snapshotOf(prefs)
                 ?: UsageRepository.get(LocalContext.current).snapshot.value
             GlanceTheme {
@@ -118,24 +120,7 @@ private fun WidgetContent(snapshot: UsageSnapshot) {
         }
     )
     val settings = AppSettings.get(context)
-    val usage = UsageSections.from(snapshot, now)
-    val sections = UsageRemaining.apply(
-        WidgetBars.apply(
-            OnDemandDisplay.apply(
-                usage,
-                showCursor = settings.showCursorOnDemand,
-                showGrok = settings.showGrokOnDemand
-            ),
-            settings.hiddenWidgetBars,
-            settings.widgetSectionOrder
-        ),
-        enabled = settings.onlyUsageRemaining,
-        dropSpentCards = true
-    )
-    val rows = widgetRows(
-        sections, now, settings.groupByLimit, pacingSections = usage,
-        percentPerWindow = settings.percentPerFiveHourWindow
-    )
+    val rows = widgetRowsFor(snapshot, settings.displayPreferences.value, settings.percentPerFiveHourWindow, now)
 
     Column(
         modifier = GlanceModifier
@@ -221,6 +206,34 @@ internal sealed class WidgetRow {
     }
 }
 
+/**
+ * Everything the widget lists, from [snapshot] and the display settings: on-demand toggles,
+ * per-bar visibility, software order, the usage-left filter, then [widgetRows] layout. The
+ * in-app preview calls this too, so it always matches the home-screen widget.
+ */
+internal fun widgetRowsFor(
+    snapshot: UsageSnapshot,
+    display: DisplayPreferences,
+    percentPerWindow: Double,
+    nowMs: Long = System.currentTimeMillis()
+): List<WidgetRow> {
+    val usage = UsageSections.from(snapshot, nowMs)
+    val sections = UsageRemaining.apply(
+        WidgetBars.apply(
+            OnDemandDisplay.apply(
+                usage,
+                showCursor = display.showCursorOnDemand,
+                showGrok = display.showGrokOnDemand
+            ),
+            display.hiddenWidgetBars,
+            display.widgetSectionOrder
+        ),
+        enabled = display.onlyUsageRemaining,
+        dropSpentCards = true
+    )
+    return widgetRows(sections, nowMs, display.groupByLimit, pacingSections = usage, percentPerWindow = percentPerWindow)
+}
+
 internal fun widgetRows(
     sections: List<SoftwareSection>,
     nowMs: Long = System.currentTimeMillis(),
@@ -228,7 +241,7 @@ internal fun widgetRows(
     pacingSections: List<SoftwareSection> = sections,
     percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW
 ): List<WidgetRow> = buildList {
-    val visible = sections.map { section -> section.copy(meters = section.meters.filter { it.hasUsageBar }) }
+    val visible = sections.map { section -> section.copy(meters = section.meters.filter { it.hasUsageBar || it.spentShortWindow }) }
     val slackBySection = pacingSections.mapNotNull { section ->
         if (section.weeklyMeterId() == null) return@mapNotNull null
         val pacing = PacingPlanner.forSection(section, nowMs, percentPerWindow)
@@ -300,13 +313,18 @@ private fun MutableList<WidgetRow>.addSection(
             section.meters.any { it.hasUsageBar && it.resetsAtEpochMs == at }
         }
     } else null
-    val softwareHeading = meters.size > 1 || names.any { it.startsWith("3rd-party") } ||
+    val softwareHeading = meters.size > 1 || names.any { it.startsWith("3rd-party") } || meters.any { it.spentShortWindow } ||
         (meters.isEmpty() && (plan != null || manual != null))
     if (softwareHeading) add(WidgetRow.Heading(provider, software = true))
 
     val weeklyMeterId = section.weeklyMeterId()
     meters.forEachIndexed { index, meter ->
         val name = names[index]
+        if (meter.spentShortWindow) {
+            // Spent 5-hour window with "only usage remaining": no bar, just when it frees up.
+            meter.resetsAtEpochMs?.let { add(WidgetRow.Reset(it, label = name.ifEmpty { null }, indented = true)) }
+            return@forEachIndexed
+        }
         val title = when {
             softwareHeading -> name.ifEmpty { if (section.id == SoftwareSectionId.GEMINI) "Google" else "All" }
             name.isEmpty() -> provider
@@ -320,7 +338,7 @@ private fun MutableList<WidgetRow>.addSection(
         )
         val reset = meter.resetsAtEpochMs
         // Put one caption beneath a run of bars with the same reset, in pace order.
-        if (reset != null && reset != meters.getOrNull(index + 1)?.resetsAtEpochMs) {
+        if (reset != null && reset != meters.getOrNull(index + 1)?.takeUnless { it.spentShortWindow }?.resetsAtEpochMs) {
             add(WidgetRow.Reset(reset, indented = softwareHeading))
         }
     }
@@ -421,7 +439,7 @@ private fun SignInRow(title: String, providerId: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "$title · Sign in",
+            text = "$title Â· Sign in",
             style = TextStyle(color = Warn, fontSize = 12.sp),
             modifier = GlanceModifier.defaultWeight()
         )

@@ -27,6 +27,23 @@ class WidgetRowsTest {
         assertEquals(1000L, rows.filterIsInstance<WidgetRow.Reset>().single().at)
     }
 
+    @Test fun spentFiveHourShowsSoftwareAndResetWithoutBar() {
+        val fiveHour = 5L * 3_600_000
+        val spent = UsageMeter(
+            id = "openai.five_hour", title = "5-hour", resetsAtEpochMs = 1000,
+            windowLengthMs = fiveHour, spentShortWindow = true
+        )
+        val section = SoftwareSection(
+            SoftwareSectionId.CODEX, ProviderId.OPENAI, ProviderStatus.OK,
+            meters = listOf(spent, meter("openai.weekly", "Weekly", 5000).copy(windowLengthMs = 7 * 24 * 3_600_000L))
+        )
+        val rows = widgetRows(listOf(section), nowMs = 0, groupByLimit = true)
+        val five = rows.indexOf(WidgetRow.Heading("5h"))
+        assertEquals(WidgetRow.Heading("Codex", software = true), rows[five + 1])
+        assertEquals(WidgetRow.Reset(1000, indented = true), rows[five + 2])
+        assertEquals(listOf("Codex"), rows.filterIsInstance<WidgetRow.Meter>().map { it.title })
+    }
+
     @Test fun identicalResetsShareOneCaptionWithinGemini() {
         val section = SoftwareSection(
             SoftwareSectionId.GEMINI, ProviderId.GEMINI, ProviderStatus.OK,
