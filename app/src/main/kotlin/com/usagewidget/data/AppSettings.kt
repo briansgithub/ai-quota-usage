@@ -3,7 +3,11 @@ package com.usagewidget.data
 import android.content.Context
 import com.usagewidget.domain.AlertPreferences
 import com.usagewidget.domain.DisplayPreferences
+import com.usagewidget.domain.PaceEstimate
+import com.usagewidget.domain.PaceSample
 import com.usagewidget.domain.PacingPolicy
+import com.usagewidget.domain.RatioLearner
+import com.usagewidget.domain.UsageSnapshot
 import com.usagewidget.domain.QuietHours
 import com.usagewidget.domain.QuotaRuleId
 import com.usagewidget.domain.QuotaThresholdPreferences
@@ -43,6 +47,43 @@ class AppSettings private constructor(context: Context) {
             prefs.edit().putFloat(KEY_PACE_PCT, PacingPolicy.clampPercentPerWindow(value).toFloat()).apply()
             publishAlerts()
         }
+
+    /** Learn each model's weekly % per 5-hour window from usage ([RatioLearner]). */
+    var learnPaceRate: Boolean
+        get() = prefs.getBoolean(KEY_PACE_LEARN, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_PACE_LEARN, value).apply()
+            publishAlerts()
+        }
+
+    fun paceSamples(): List<PaceSample> {
+        val raw = prefs.getString(KEY_PACE_SAMPLES, "") ?: ""
+        if (raw.isBlank()) return emptyList()
+        return runCatching { json.decodeFromString<List<PaceSample>>(raw) }.getOrDefault(emptyList())
+    }
+
+    private fun learnedRatesStored(): Map<String, Double> {
+        val raw = prefs.getString(KEY_PACE_LEARNED, "") ?: ""
+        if (raw.isBlank()) return emptyMap()
+        return runCatching { json.decodeFromString<Map<String, Double>>(raw) }.getOrDefault(emptyMap())
+    }
+
+    /** Called after every refresh: adds this round's usage, then re-learns the per-model rates. */
+    fun recordPaceSamples(previous: UsageSnapshot, current: UsageSnapshot, nowMs: Long) {
+        val samples = RatioLearner.observe(paceSamples(), previous, current, nowMs)
+        prefs.edit().putString(KEY_PACE_SAMPLES, json.encodeToString(samples)).apply()
+        relearnPaceRates(current, nowMs)
+    }
+
+    /** Recomputes the learned rates (e.g. after the starting guess changed). */
+    fun relearnPaceRates(snapshot: UsageSnapshot, nowMs: Long = System.currentTimeMillis()) {
+        val learned = RatioLearner.learnedRates(paceSamples(), snapshot, percentPerFiveHourWindow, nowMs)
+        prefs.edit().putString(KEY_PACE_LEARNED, json.encodeToString(learned)).apply()
+        publishAlerts()
+    }
+
+    fun paceEstimates(snapshot: UsageSnapshot, nowMs: Long = System.currentTimeMillis()): List<PaceEstimate> =
+        RatioLearner.estimates(paceSamples(), snapshot, percentPerFiveHourWindow, nowMs)
 
     var notifyUsageRestored: Boolean
         get() = prefs.getBoolean(KEY_NOTIFY_RESTORED, true)
@@ -277,6 +318,8 @@ class AppSettings private constructor(context: Context) {
 
     private fun readAlertPreferences(): AlertPreferences = AlertPreferences(
         percentPerWindow = percentPerFiveHourWindow,
+        learnedRates = if (learnPaceRate) learnedRatesStored() else emptyMap(),
+        learnPaceRate = learnPaceRate,
         notifyStaleFailures = failureNotificationsEnabled,
         notifyUsageRestored = notifyUsageRestored,
         notifyPacingReminders = notifyPacingReminders,
@@ -338,6 +381,9 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_NEXT_REFRESH = "next_refresh_epoch_ms"
         private const val KEY_PERIODIC_INTERVAL = "enqueued_periodic_interval_ms"
         private const val KEY_PACE_PCT = "percent_per_five_hour_window"
+        private const val KEY_PACE_LEARN = "pace_rate_learn"
+        private const val KEY_PACE_SAMPLES = "pace_rate_samples"
+        private const val KEY_PACE_LEARNED = "pace_rate_learned"
         private const val KEY_NOTIFY_RESTORED = "notify_usage_restored"
         private const val KEY_NOTIFY_PACE = "notify_pacing_reminders"
         private const val KEY_NOTIFY_MISSED = "notify_pacing_missed"

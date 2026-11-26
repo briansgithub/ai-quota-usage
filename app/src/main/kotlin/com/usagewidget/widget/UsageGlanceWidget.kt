@@ -57,6 +57,7 @@ import com.usagewidget.domain.OnDemandDisplay
 import com.usagewidget.domain.UsageRemaining
 import com.usagewidget.domain.WidgetBars
 import com.usagewidget.domain.PaceKind
+import com.usagewidget.domain.PaceRates
 import com.usagewidget.domain.PaceWindows
 import com.usagewidget.domain.PacingPlanner
 import com.usagewidget.domain.PacingPolicy
@@ -120,7 +121,7 @@ private fun WidgetContent(snapshot: UsageSnapshot) {
         }
     )
     val settings = AppSettings.get(context)
-    val rows = widgetRowsFor(snapshot, settings.displayPreferences.value, settings.percentPerFiveHourWindow, now)
+    val rows = widgetRowsFor(snapshot, settings.displayPreferences.value, settings.alertPreferencesValue().paceRates(), now)
 
     Column(
         modifier = GlanceModifier
@@ -214,7 +215,7 @@ internal sealed class WidgetRow {
 internal fun widgetRowsFor(
     snapshot: UsageSnapshot,
     display: DisplayPreferences,
-    percentPerWindow: Double,
+    rates: PaceRates,
     nowMs: Long = System.currentTimeMillis()
 ): List<WidgetRow> {
     val usage = UsageSections.from(snapshot, nowMs)
@@ -231,7 +232,7 @@ internal fun widgetRowsFor(
         enabled = display.onlyUsageRemaining,
         dropSpentCards = true
     )
-    return widgetRows(sections, nowMs, display.groupByLimit, pacingSections = usage, percentPerWindow = percentPerWindow)
+    return widgetRows(sections, nowMs, display.groupByLimit, pacingSections = usage, rates = rates)
 }
 
 internal fun widgetRows(
@@ -239,12 +240,12 @@ internal fun widgetRows(
     nowMs: Long = System.currentTimeMillis(),
     groupByLimit: Boolean = false,
     pacingSections: List<SoftwareSection> = sections,
-    percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW
+    rates: PaceRates = PaceRates()
 ): List<WidgetRow> = buildList {
     val visible = sections.map { section -> section.copy(meters = section.meters.filter { it.hasUsageBar || it.spentShortWindow }) }
     val slackBySection = pacingSections.mapNotNull { section ->
         if (section.weeklyMeterId() == null) return@mapNotNull null
-        val pacing = PacingPlanner.forSection(section, nowMs, percentPerWindow)
+        val pacing = PacingPlanner.forSection(section, nowMs, rates)
             ?.takeIf { it.kind == PaceKind.FIVE_AND_WEEKLY } ?: return@mapNotNull null
         section.id to pacing.slackMs
     }.toMap()

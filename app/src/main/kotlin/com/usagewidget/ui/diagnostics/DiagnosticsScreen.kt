@@ -34,6 +34,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import kotlin.math.roundToInt
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -235,10 +237,27 @@ fun DiagnosticsScreen(
                     Text(stringResource(R.string.send_test_notification))
                 }
                 Text(
-                    stringResource(R.string.percent_per_window),
+                    "Weekly % per 5-hour window",
                     color = CursorText,
                     style = MaterialTheme.typography.bodyMedium
                 )
+                SettingSwitch(
+                    label = "Learn from my usage",
+                    checked = alerts.learnPaceRate,
+                    onCheckedChange = { viewModel.setLearnPaceRate(it) }
+                )
+                val estimates = remember(snapshot, alerts) { viewModel.paceEstimates() }
+                if (alerts.learnPaceRate) {
+                    estimates.forEach { e ->
+                        Text(
+                            if (e.samples == 0) "${e.label}: learning (no data yet)"
+                            else "${e.label} ${e.rate.roundToInt()}% · from ${e.observedFivePoints.roundToInt()}% of 5-hour use",
+                            color = CursorMuted,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+                Text("Starting guess", color = CursorMuted, style = MaterialTheme.typography.bodySmall)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { viewModel.setPercentPerWindow(alerts.percentPerWindow - 1.0) }) {
                         Text("−", color = CursorText)
@@ -254,7 +273,7 @@ fun DiagnosticsScreen(
                     }
                 }
                 Text(
-                    "Default 12%. Codex pacing counts how many 5-hour windows you still need from remaining weekly %. Quiet hours skip usage-restored and pacing alerts only.",
+                    "Default 12%. Used until a model has usage to learn from; recent and larger 5-hour use counts most. Pacing counts how many 5-hour windows you still need from remaining weekly %. Quiet hours skip usage-restored and pacing alerts only.",
                     color = CursorMuted,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -262,7 +281,11 @@ fun DiagnosticsScreen(
 
             Button(
                 onClick = {
-                    val text = DiagnosticsReport.format(hydrated, BuildConfig.VERSION_NAME)
+                    val text = DiagnosticsReport.format(hydrated, BuildConfig.VERSION_NAME) +
+                        "\n\nLearned weekly % per 5-hour window (starting guess ${alerts.percentPerWindow.roundToInt()}%):\n" +
+                        viewModel.paceEstimates().joinToString("\n") {
+                            "  ${it.pair}: ${"%.1f".format(it.rate)}% · ${it.samples} windows · ${it.observedFivePoints.roundToInt()}% of 5h"
+                        }
                     val clipboard = context.getSystemService(ClipboardManager::class.java)
                     clipboard.setPrimaryClip(ClipData.newPlainText("Usage Widget diagnostics", text))
                     Toast.makeText(context, "Diagnostics copied", Toast.LENGTH_SHORT).show()

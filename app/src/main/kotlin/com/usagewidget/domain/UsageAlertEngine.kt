@@ -11,8 +11,13 @@ data class AlertPreferences(
     val notifyPacingMissed: Boolean = true,
     val quietHoursEnabled: Boolean = false,
     val quietHoursStartHour: Int = QuietHours.DEFAULT_START_HOUR,
-    val quietHoursEndHour: Int = QuietHours.DEFAULT_END_HOUR
-)
+    val quietHoursEndHour: Int = QuietHours.DEFAULT_END_HOUR,
+    /** Per-model learned weekly % per 5-hour window ([RatioLearner]); empty when learning is off. */
+    val learnedRates: Map<String, Double> = emptyMap(),
+    val learnPaceRate: Boolean = true
+) {
+    fun paceRates(): PaceRates = PaceRates(percentPerWindow, learnedRates)
+}
 
 enum class AlertChannel { RESTORED, PACING, QUOTA }
 
@@ -60,7 +65,7 @@ object UsageAlertEngine {
         }
         val sections = UsageSections.from(current, nowMs)
         val pacing = sections.mapNotNull { section ->
-            PacingPlanner.forSection(section, nowMs, prefs.percentPerWindow)
+            PacingPlanner.forSection(section, nowMs, prefs.paceRates())
         }
 
         val candidates = mutableListOf<AlertToPost>()

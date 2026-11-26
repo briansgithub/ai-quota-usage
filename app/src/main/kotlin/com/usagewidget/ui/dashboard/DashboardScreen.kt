@@ -169,7 +169,7 @@ fun DashboardScreen(
                     letterSpacing = 0.8.sp
                 )
                 WidgetPreview(
-                    rows = widgetRowsFor(snapshot, display, alerts.percentPerWindow, now),
+                    rows = widgetRowsFor(snapshot, display, alerts.paceRates(), now),
                     nowMs = now,
                     onSignIn = { wire -> ProviderId.entries.firstOrNull { it.wireName == wire }?.let(onSignIn) }
                 )

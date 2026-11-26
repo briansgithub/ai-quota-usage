@@ -9,8 +9,8 @@ import kotlin.math.roundToInt
 /**
  * Use-it-or-lose-it pacing.
  *
- * Each 5-hour window can burn about [PacingPolicy.DEFAULT_PERCENT_PER_WINDOW]% of weekly
- * usage (configurable). Windows needed `N = ceil(R / P)`. Working backwards from the
+ * Each 5-hour window can burn about P% of weekly usage: learned per model from usage
+ * ([RatioLearner]), else the manual setting (default [PacingPolicy.DEFAULT_PERCENT_PER_WINDOW]%). Windows needed `N = ceil(R / P)`. Working backwards from the
  * weekly reset, the latest start for the k-th-from-last needed window is
  * `weeklyReset - k * 5h`. Slack is time until weekly reset minus the time those
  * windows occupy, after waiting out an already-started 5h window.
@@ -36,8 +36,13 @@ object PacingPolicy {
     const val CRITICAL_SLACK_MS = 2L * 60 * 60 * 1000
     const val REMAINING_EPS = 0.5
 
+    /** Manual setting (starting guess) range. */
     fun clampPercentPerWindow(value: Double): Double =
         value.coerceIn(MIN_PERCENT_PER_WINDOW, MAX_PERCENT_PER_WINDOW)
+
+    /** Range for any rate the planner uses, manual or learned ([RatioLearner]). */
+    fun clampRate(value: Double): Double =
+        value.coerceIn(RatioLearner.LEARNED_MIN, RatioLearner.LEARNED_MAX)
 }
 
 enum class PaceKind { FIVE_AND_WEEKLY, WEEKLY_ONLY }
@@ -81,7 +86,7 @@ data class PacingResult(
 
 object PacingPlanner {
     fun windowsNeeded(remaining: Double, percentPerWindow: Double): Int {
-        val p = PacingPolicy.clampPercentPerWindow(percentPerWindow)
+        val p = PacingPolicy.clampRate(percentPerWindow)
         if (remaining <= PacingPolicy.REMAINING_EPS || p <= 0.0) return 0
         return ceil(remaining / p).toInt()
     }
@@ -112,7 +117,7 @@ object PacingPlanner {
         manuals: List<ManualResetCredit> = emptyList(),
         sectionId: String = SoftwareSectionId.CODEX.wireName
     ): PacingResult {
-        val p = PacingPolicy.clampPercentPerWindow(percentPerWindow)
+        val p = PacingPolicy.clampRate(percentPerWindow)
         val state = fiveHourState(fiveHourRemaining)
         val currentDeliverable = when (state) {
             FiveHourWindowState.ACTIVE -> {
@@ -221,7 +226,7 @@ object PacingPlanner {
         nowMs: Long,
         percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW
     ): List<ManualResetPace> {
-        val p = PacingPolicy.clampPercentPerWindow(percentPerWindow)
+        val p = PacingPolicy.clampRate(percentPerWindow)
         val windows = windowsNeeded(PacingPolicy.MANUAL_FULL_RESET_PERCENT, p)
         val timeNeeded = windows * PacingPolicy.WINDOW_MS
         return credits.filter { it.isAvailable }.map { credit ->
@@ -262,6 +267,13 @@ object PacingPlanner {
         section: SoftwareSection,
         nowMs: Long,
         percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW
+    ): PacingResult? = forSection(section, nowMs, PaceRates.fixed(percentPerWindow))
+
+    /** [rates] gives each model's learned weekly % per 5-hour window ([RatioLearner]). */
+    fun forSection(
+        section: SoftwareSection,
+        nowMs: Long,
+        rates: PaceRates
     ): PacingResult? {
         return when (section.id) {
             SoftwareSectionId.GEMINI -> null // Quota bars have pace ticks; no generic reminder schedule.
@@ -276,7 +288,7 @@ object PacingPlanner {
                     fiveHourRemaining = five.remainingAmount(),
                     fiveHourResetEpochMs = five?.resetsAtEpochMs,
                     nowMs = nowMs,
-                    percentPerWindow = percentPerWindow,
+                    percentPerWindow = rates.rateFor("codex"),
                     manuals = section.manualResets?.credits.orEmpty(),
                     sectionId = section.id.wireName
                 )
@@ -292,7 +304,7 @@ object PacingPlanner {
                     fiveHourRemaining = five.remainingAmount(),
                     fiveHourResetEpochMs = five?.resetsAtEpochMs,
                     nowMs = nowMs,
-                    percentPerWindow = percentPerWindow,
+                    percentPerWindow = rates.rateFor("claude"),
                     manuals = section.manualResets?.credits.orEmpty(),
                     sectionId = section.id.wireName
                 )

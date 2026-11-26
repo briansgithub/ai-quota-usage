@@ -73,10 +73,21 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setPercentPerWindow(value: Double) {
         repo.settings().percentPerFiveHourWindow = PacingPolicy.clampPercentPerWindow(value)
+        repo.settings().relearnPaceRates(repo.snapshot.value)
         viewModelScope.launch {
             runCatching { WidgetPublisher.push(getApplication()) }
         }
     }
+
+    fun setLearnPaceRate(enabled: Boolean) {
+        repo.settings().learnPaceRate = enabled
+        viewModelScope.launch {
+            runCatching { WidgetPublisher.push(getApplication()) }
+        }
+    }
+
+    fun paceEstimates(): List<com.usagewidget.domain.PaceEstimate> =
+        repo.settings().paceEstimates(repo.snapshot.value)
 
     fun setQuotaAlertsEnabled(enabled: Boolean) {
         repo.settings().quotaAlertsEnabled = enabled

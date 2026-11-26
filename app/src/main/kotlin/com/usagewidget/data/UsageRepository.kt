@@ -85,6 +85,7 @@ class UsageRepository private constructor(private val context: Context) {
             )
             persist(combined)
             _snapshot.value = combined
+            runCatching { settings.recordPaceSamples(previous, combined, now) }
             runCatching { alerts.evaluate(previous, combined, now) }
             notifier.sync(combined, now)
             latest = combined
