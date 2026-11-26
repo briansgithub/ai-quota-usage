@@ -11,6 +11,7 @@ public class AppSettingsTest
     {
         var settings = new AppSettings(new MemorySettingsStore());
         Assert.False(settings.AlwaysOnTop);
+        Assert.False(settings.GroupByLimit);
         Assert.Equal(MiniChrome.DefaultWidth, settings.MiniWidth);
         Assert.Equal(MiniChrome.DefaultHeight, settings.MiniHeight);
     }
@@ -32,6 +33,31 @@ public class AppSettingsTest
         Assert.True(state.ShowCursorOnDemand);
         Assert.True(state.ShowGrokOnDemand);
         Assert.Null(state.WidgetSectionOrder);
+        Assert.False(state.GroupByLimit);
+    }
+
+    [Fact]
+    public void GroupByLimitDefaultsOffAndRoundTripsAndNotifies()
+    {
+        var store = new MemorySettingsStore();
+        var settings = new AppSettings(store);
+        Assert.False(settings.GroupByLimit);
+
+        var changes = 0;
+        settings.Changed += () => changes++;
+
+        settings.GroupByLimit = false; // no-op when already false
+        Assert.Equal(0, changes);
+
+        settings.GroupByLimit = true;
+        Assert.True(settings.GroupByLimit);
+        Assert.Equal(1, changes);
+
+        var reloaded = new AppSettings(store);
+        Assert.True(reloaded.GroupByLimit);
+
+        reloaded.GroupByLimit = false;
+        Assert.False(new AppSettings(store).GroupByLimit);
     }
 
     [Fact]

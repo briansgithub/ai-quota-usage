@@ -52,8 +52,16 @@ internal sealed class TrayGlanceWindow : Window
             _body.Children.Add(Ui.T(model.EmptyMessage ?? "No usage data", Theme.MutedBrush, 11));
             return;
         }
+        string? currentGroup = null;
         foreach (var line in model.Lines)
         {
+            if (line.GroupTitle is not null && line.GroupTitle != currentGroup)
+            {
+                var heading = Ui.T(line.GroupTitle, Theme.BrightBrush, 11, FontWeights.SemiBold);
+                heading.Margin = new Thickness(0, currentGroup is null ? 0 : 5, 0, 3);
+                _body.Children.Add(heading);
+                currentGroup = line.GroupTitle;
+            }
             var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 3), MinWidth = 168 };
             var pct = Ui.T(line.UsedLabel, Theme.TextBrush, 11, FontWeights.SemiBold);
             DockPanel.SetDock(pct, Dock.Right);

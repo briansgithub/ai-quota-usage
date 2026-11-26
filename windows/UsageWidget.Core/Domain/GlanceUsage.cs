@@ -1,6 +1,11 @@
 namespace UsageWidget;
 
-public sealed record GlanceLine(string Label, int UsedPercent, double? ExpectedUsedPercent = null, bool IsCapBar = false)
+public sealed record GlanceLine(
+    string Label,
+    int UsedPercent,
+    double? ExpectedUsedPercent = null,
+    bool IsCapBar = false,
+    string? GroupTitle = null)
 {
     public string UsedLabel => $"{UsedPercent}% used";
 }
@@ -33,13 +38,19 @@ public static class GlanceUsage
         bool showCursorOnDemand = true,
         bool showGrokOnDemand = true,
         IReadOnlySet<string>? hiddenBars = null,
-        IReadOnlyList<SoftwareSectionId>? sectionOrder = null)
+        IReadOnlyList<SoftwareSectionId>? sectionOrder = null,
+        bool groupByLimit = false)
     {
         var lines = new List<GlanceLine>();
         var hadBar = false;
-        foreach (var section in WidgetBars.Apply(OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), showCursorOnDemand, showGrokOnDemand), hiddenBars, sectionOrder))
+        var sections = WidgetBars.Apply(
+            OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), showCursorOnDemand, showGrokOnDemand),
+            hiddenBars,
+            sectionOrder);
+
+        void AppendMeters(SoftwareSectionId sectionId, IEnumerable<UsageMeter> meters, string? groupTitle)
         {
-            foreach (var meter in section.MeterList)
+            foreach (var meter in meters)
             {
                 if (!meter.HasUsageBar) continue;
                 var used = meter.DisplayUsedPercent;
@@ -49,9 +60,25 @@ public static class GlanceUsage
                 // a weekly bar at 100% is still the usage line, and dropping it looks like the meter is missing.
                 if (used.Value >= 100 && !meter.IsCapBar && meter.Id != MeterIds.Grok) continue;
                 var expected = meter.IsCapBar ? null : PaceWindows.ExpectedUsedPercent(meter, nowMs);
-                lines.Add(new GlanceLine(Label(section.Id, meter), used.Value, expected, meter.IsCapBar));
+                lines.Add(new GlanceLine(Label(sectionId, meter), used.Value, expected, meter.IsCapBar, groupTitle));
             }
         }
+
+        if (!groupByLimit)
+        {
+            foreach (var section in sections)
+                AppendMeters(section.Id, section.MeterList, null);
+        }
+        else
+        {
+            foreach (var group in LimitGrouping.Group(sections, nowMs))
+            {
+                var title = group.Kind.Title();
+                foreach (var entry in group.Entries)
+                    AppendMeters(entry.Section.Id, entry.Meters, title);
+            }
+        }
+
         var empty = lines.Count > 0 ? null
             : hadBar ? "All quotas at 100% used"
             : "No usage data";
