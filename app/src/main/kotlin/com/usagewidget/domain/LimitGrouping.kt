@@ -27,10 +27,8 @@ data class LimitGroupEntry(
 data class LimitGroup(val kind: LimitKind, val entries: List<LimitGroupEntry>)
 
 /**
- * Regroups software cards by rate-limit window length: short windows first, then long, then a
- * trailing group for software with nothing to show. Software order within a group follows the
- * incoming [sections] order (so the widget's custom software order is kept). Matches Windows
- * `LimitGrouping`.
+ * Regroups software cards by rate-limit window length: long windows first, then short, then a
+ * trailing group for software with nothing to show. Order inside groups: see [LimitGrouping.group].
  */
 object LimitGrouping {
     /** Same cutoff as [UsageRemaining.isShortWindow]: 24 hours. */
@@ -60,7 +58,34 @@ object LimitGrouping {
         return if (length <= SHORT_WINDOW_MAX_MS) LimitKind.SHORT else LimitKind.LONG
     }
 
-    fun group(sections: List<SoftwareSection>): List<LimitGroup> {
+    /**
+     * Used-% minus even-pace expected-% (the widget's own bar-color delta, see [UsedGradient]);
+     * negative means behind even pace (less used than the clock allows, red bar). Null when
+     * there is no pace marker: spend caps, unknown windows, or no used figure.
+     */
+    fun paceDelta(meter: UsageMeter, nowMs: Long): Double? {
+        if (meter.isCapBar) return null
+        val used = meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: return null
+        val expected = PaceWindows.expectedUsedPercent(meter, nowMs) ?: return null
+        return used - expected
+    }
+
+    /** 0 = behind even pace, 1 = on pace or ahead, 2 = no pace data. */
+    private fun paceRank(meter: UsageMeter, nowMs: Long): Int {
+        val delta = paceDelta(meter, nowMs) ?: return 2
+        return if (delta < 0.0) 0 else 1
+    }
+
+    /**
+     * Groups are ordered Long, Short, then NO_DATA. Within a group, software are ordered by
+     * their most-behind bar (lowest [paceDelta]; software with no pace data last), ties keeping
+     * the incoming [sections] order. Within a software, bars behind even pace come first, then
+     * bars on or ahead of pace, then bars without pace data, each keeping their original order.
+     */
+    fun group(
+        sections: List<SoftwareSection>,
+        nowMs: Long = System.currentTimeMillis()
+    ): List<LimitGroup> {
         val shortEntries = mutableListOf<LimitGroupEntry>()
         val longEntries = mutableListOf<LimitGroupEntry>()
         val noData = mutableListOf<LimitGroupEntry>()
@@ -72,13 +97,22 @@ object LimitGrouping {
             val byKind = section.meters.groupBy { classify(it) }
             val short = byKind[LimitKind.SHORT].orEmpty()
             val long = byKind[LimitKind.LONG].orEmpty()
-            if (short.isNotEmpty()) shortEntries += LimitGroupEntry(section, short, primary = true)
-            if (long.isNotEmpty()) longEntries += LimitGroupEntry(section, long, primary = short.isEmpty())
+            if (short.isNotEmpty()) shortEntries += LimitGroupEntry(section, short.byPace(nowMs), primary = false)
+            if (long.isNotEmpty()) longEntries += LimitGroupEntry(section, long.byPace(nowMs), primary = false)
         }
+        val seen = mutableSetOf<SoftwareSectionId>()
+        fun List<LimitGroupEntry>.ordered() = sortedBy { entry ->
+            entry.meters.mapNotNull { paceDelta(it, nowMs) }.minOrNull() ?: Double.POSITIVE_INFINITY
+        }.map { it.copy(primary = seen.add(it.section.id)) }
+        // Long first: card-level lines (primary) land under each software's first displayed entry.
+        val long = longEntries.ordered()
+        val short = shortEntries.ordered()
         return listOf(
-            LimitGroup(LimitKind.SHORT, shortEntries),
-            LimitGroup(LimitKind.LONG, longEntries),
+            LimitGroup(LimitKind.LONG, long),
+            LimitGroup(LimitKind.SHORT, short),
             LimitGroup(LimitKind.NO_DATA, noData)
         ).filter { it.entries.isNotEmpty() }
     }
+
+    private fun List<UsageMeter>.byPace(nowMs: Long): List<UsageMeter> = sortedBy { paceRank(it, nowMs) }
 }

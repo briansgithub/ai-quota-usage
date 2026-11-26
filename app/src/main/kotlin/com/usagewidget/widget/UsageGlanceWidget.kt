@@ -272,7 +272,7 @@ private fun widgetRows(
         }
         return rows
     }
-    LimitGrouping.group(sections).forEachIndexed { groupIndex, group ->
+    LimitGrouping.group(sections, nowMs).forEachIndexed { groupIndex, group ->
         if (groupIndex > 0) rows += WidgetRow.Gap
         rows += WidgetRow.GroupHeader(group.kind.title)
         group.entries.forEach { entry: LimitGroupEntry ->
