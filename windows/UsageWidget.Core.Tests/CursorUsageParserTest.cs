@@ -308,4 +308,20 @@ public class CursorUsageParserTest
         var disabled = CursorHtmlExtractor.Extract(Fixture.Load("cursor-spending-page.txt"), SnapshotTime);
         Assert.Null(disabled.Plan.OnDemand);
     }
+
+    [Fact]
+    public void GrokExplicitlyDisabledOnDemandDoesNotFallBackToPlanOnDemand()
+    {
+        var plan = CursorUsageParser.ParseUsageSummary(
+            """{"billingCycleEnd":"2026-11-11T00:00:00.000Z","individualUsage":{"plan":{"autoPercentUsed":17},"onDemand":{"enabled":true,"used":1234,"limit":5000}}}""",
+            SnapshotTime);
+        var grok = CursorUsageParser.ParseSandUsage(
+            """{"usagePercent":10,"hasNonZeroIncludedLimit":true,"nextResetTimestampUtc":"2026-11-13T00:00:00.000Z","onDemandSettings":{"enabled":false,"used":2500,"limit":5000}}""",
+            SnapshotTime);
+        Assert.Null(grok.OnDemand);
+        Assert.True(grok.OnDemandDisabled);
+        var snapshot = CursorUsageParser.ToSnapshot(plan, grok);
+        Assert.Contains(snapshot.MeterList, m => m.Id == "cursor.on_demand");
+        Assert.DoesNotContain(snapshot.MeterList, m => m.Id == "cursor.grok_on_demand");
+    }
 }

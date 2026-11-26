@@ -118,7 +118,8 @@ fun DiagnosticsScreen(
                     onShowCursorOnDemand = viewModel::setShowCursorOnDemand,
                     onShowGrokOnDemand = viewModel::setShowGrokOnDemand,
                     onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
-                    onWidgetBar = viewModel::setWidgetBarVisible
+                    onWidgetBar = viewModel::setWidgetBarVisible,
+                    onMoveWidgetSection = viewModel::moveWidgetSection
                 )
                 HorizontalDivider(color = CursorMuted.copy(alpha = 0.2f))
                 Text(
@@ -207,6 +208,11 @@ fun DiagnosticsScreen(
                     label = stringResource(R.string.quota_claude_weekly),
                     checked = QuotaRuleId.CLAUDE_WEEKLY.wire in quota.enabledRules,
                     onCheckedChange = { viewModel.setQuotaClaudeWeeklyEnabled(it) }
+                )
+                SettingSwitch(
+                    label = "Gemini (Antigravity) quota",
+                    checked = QuotaRuleId.GEMINI_FIVE_HOUR.wire in quota.enabledRules,
+                    onCheckedChange = { viewModel.setQuotaGeminiEnabled(it) }
                 )
                 var thresholdsCsv by rememberSaveable(quota.thresholdsCsv) { mutableStateOf(quota.thresholdsCsv) }
                 OutlinedTextField(

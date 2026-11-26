@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -106,9 +107,9 @@ internal static class Ui
         return box;
     }
 
-    public static FrameworkElement UsageBar(int usedPercent, double height = 8, double? expectedUsedPercent = null, bool capBar = false)
+    public static FrameworkElement UsageBar(double usedPercent, double height = 8, double? expectedUsedPercent = null, bool capBar = false)
     {
-        var clamped = Math.Clamp(usedPercent, 0, 100);
+        var clamped = Math.Clamp(usedPercent, 0.0, 100.0);
         var fill = new Rectangle
         {
             Fill = capBar ? Theme.CapFill(clamped) : Theme.PaceFill(clamped, expectedUsedPercent),
@@ -119,7 +120,8 @@ internal static class Ui
             RadiusY = Math.Max(1, height / 2),
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Width = 1
+            Width = 0,
+            Visibility = clamped > 0 ? Visibility.Visible : Visibility.Collapsed
         };
         var track = new Grid { Height = height };
         track.Children.Add(new Border { Background = Theme.TrackBrush, CornerRadius = new CornerRadius(Math.Max(1, height / 2)) });
@@ -143,7 +145,7 @@ internal static class Ui
         track.SizeChanged += (_, _) =>
         {
             var w = track.ActualWidth;
-            fill.Width = Math.Max(0, w * clamped / 100.0);
+            fill.Width = clamped > 0 ? Math.Max(0, w * clamped / 100.0) : 0;
             if (tick is not null && expectedUsedPercent is { } expected)
             {
                 var x = w * Math.Clamp(expected, 0, 100) / 100.0;
@@ -190,7 +192,7 @@ internal static class Ui
         col.Children.Add(row);
         if (meter.HasUsageBar)
             col.Children.Add(UsageBar(
-                meter.DisplayUsedPercent ?? 0,
+                meter.UsedPercent ?? meter.DisplayUsedPercent ?? 0.0,
                 expectedUsedPercent: meter.IsCapBar ? null : PaceWindows.ExpectedUsedPercent(meter, nowMs),
                 capBar: meter.IsCapBar));
         if (resetSegments is not null && (used is not null || !meter.HasUsageBar))
@@ -744,7 +746,7 @@ internal sealed class MiniPanelWindow : Window
             });
         }
         var shown = OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), _host.Settings.ShowCursorOnDemand, _host.Settings.ShowGrokOnDemand);
-        foreach (var section in WidgetBars.Apply(shown, _host.Settings.HiddenWidgetBars))
+        foreach (var section in WidgetBars.Apply(shown, _host.Settings.HiddenWidgetBars, _host.Settings.WidgetSectionOrder))
             _body.Children.Add(Ui.SectionCard(section, nowMs, _host.Settings.PercentPerFiveHourWindow, compact: true, _host.OpenSignIn, _host.SignOutSection, () => _ = _host.RefreshNow()));
         if (_body.Children.Count > 0 && _body.Children[^1] is FrameworkElement last)
             last.Margin = new Thickness(last.Margin.Left, last.Margin.Top, last.Margin.Right, 0);
@@ -891,6 +893,7 @@ internal sealed class DashboardWindow : Window
         stack.Children.Add(Ui.Check("Codex 5-hour quota (off by default)", s.QuotaCodexFiveHourEnabled, v => s.QuotaCodexFiveHourEnabled = v));
         stack.Children.Add(Ui.Check("Codex weekly quota (off by default)", s.QuotaCodexWeeklyEnabled, v => s.QuotaCodexWeeklyEnabled = v));
         stack.Children.Add(Ui.Check("Claude session quota", s.QuotaClaudeFiveHourEnabled, v => s.QuotaClaudeFiveHourEnabled = v));
+        stack.Children.Add(Ui.Check("Gemini (Antigravity) quota", s.QuotaGeminiEnabled, v => s.QuotaGeminiEnabled = v));
         stack.Children.Add(Ui.Check("Claude weekly quota", s.QuotaClaudeWeeklyEnabled, v => s.QuotaClaudeWeeklyEnabled = v));
         stack.Children.Add(Ui.T("Remaining % thresholds (comma-separated)", Theme.MutedBrush, 12));
         var thresholds = new TextBox
@@ -940,6 +943,8 @@ internal sealed class OnDemandSettingsWindow : Window
     private static readonly Brush PillOnHoverBrush = Frozen(Color.FromRgb(0x25, 0x47, 0x63));
     private static readonly Brush PillOffHoverBrush = Frozen(Color.FromRgb(0x22, 0x22, 0x22));
     private const string EyeGlyph = "\uE890";
+    private const string ChevronUpGlyph = "\uE70E";
+    private const string ChevronDownGlyph = "\uE70D";
 
     private readonly AppSettings _settings;
     private readonly StackPanel _body = new();
@@ -989,7 +994,7 @@ internal sealed class OnDemandSettingsWindow : Window
         spend.Children.Add(Pill("Grok Bot", _settings.ShowGrokOnDemand, true, v => _settings.ShowGrokOnDemand = v));
         _body.Children.Add(spend);
 
-        var widgetHeader = SectionHeader("WIDGET BARS", "Click a bar to show or hide it on the mini panel and tray popup.");
+        var widgetHeader = SectionHeader("WIDGET BARS", "Click a bar to show or hide it on the mini panel and tray popup. Use arrows to reorder software.");
         widgetHeader.Margin = new Thickness(0, 10, 0, 6);
         _body.Children.Add(widgetHeader);
 
@@ -997,10 +1002,14 @@ internal sealed class OnDemandSettingsWindow : Window
         var forcedOff = new HashSet<string>();
         if (!_settings.ShowCursorOnDemand) forcedOff.Add(OnDemandDisplay.CursorMeter);
         if (!_settings.ShowGrokOnDemand) forcedOff.Add(OnDemandDisplay.GrokMeter);
-        foreach (var group in WidgetBars.Catalog.GroupBy(o => o.Section))
+        var bySection = WidgetBars.Catalog.GroupBy(o => o.Section).ToDictionary(g => g.Key, g => g.ToList());
+        var ordered = _settings.WidgetSectionOrder.Where(bySection.ContainsKey).ToList();
+        for (var i = 0; i < ordered.Count; i++)
         {
+            var section = ordered[i];
+            var group = bySection[section];
             var allHidden = group.All(o => hidden.Contains(o.MeterId) || forcedOff.Contains(o.MeterId));
-            _body.Children.Add(ServiceHeader(group.Key, allHidden));
+            _body.Children.Add(ServiceHeader(section, allHidden, canMoveUp: i > 0, canMoveDown: i < ordered.Count - 1));
             var row = PillRow();
             foreach (var option in group)
             {
@@ -1022,14 +1031,30 @@ internal sealed class OnDemandSettingsWindow : Window
         return stack;
     }
 
-    private static FrameworkElement ServiceHeader(SoftwareSectionId section, bool allHidden)
+    private FrameworkElement ServiceHeader(SoftwareSectionId section, bool allHidden, bool canMoveUp, bool canMoveDown)
     {
         var brush = allHidden ? Theme.MutedBrush : Theme.TextBrush;
         var row = new DockPanel { Margin = new Thickness(0, 4, 0, 5), LastChildFill = true };
+
+        var arrows = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        arrows.Children.Add(OrderButton(ChevronUpGlyph, $"Move {section.Title()} up", canMoveUp, () =>
+        {
+            _settings.MoveWidgetSection(section, -1);
+            Dispatcher.BeginInvoke(Rebuild);
+        }));
+        arrows.Children.Add(OrderButton(ChevronDownGlyph, $"Move {section.Title()} down", canMoveDown, () =>
+        {
+            _settings.MoveWidgetSection(section, 1);
+            Dispatcher.BeginInvoke(Rebuild);
+        }));
+        DockPanel.SetDock(arrows, Dock.Right);
+        row.Children.Add(arrows);
+
         if (allHidden)
         {
             var tag = Ui.T("Hidden", Theme.MutedBrush, 11);
             tag.VerticalAlignment = VerticalAlignment.Center;
+            tag.Margin = new Thickness(0, 0, 6, 0);
             DockPanel.SetDock(tag, Dock.Right);
             row.Children.Add(tag);
         }
@@ -1044,6 +1069,44 @@ internal sealed class OnDemandSettingsWindow : Window
         name.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(name);
         return row;
+    }
+
+    private static Button OrderButton(string glyph, string label, bool enabled, Action onClick)
+    {
+        var btn = new Button
+        {
+            IsEnabled = enabled,
+            Width = 24,
+            Height = 22,
+            Margin = new Thickness(2, 0, 0, 0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Cursor = enabled ? Cursors.Hand : Cursors.Arrow,
+            Opacity = enabled ? 1.0 : 0.3,
+            ToolTip = label,
+            Content = new TextBlock
+            {
+                Text = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 10,
+                Foreground = Theme.TextBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        System.Windows.Automation.AutomationProperties.SetName(btn, label);
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        btn.Template = new ControlTemplate(typeof(Button)) { VisualTree = border };
+        btn.MouseEnter += (_, _) => { if (btn.IsEnabled) btn.Background = PillOffHoverBrush; };
+        btn.MouseLeave += (_, _) => btn.Background = Brushes.Transparent;
+        btn.Click += (_, _) => onClick();
+        return btn;
     }
 
     private static WrapPanel PillRow() => new() { Orientation = Orientation.Horizontal };

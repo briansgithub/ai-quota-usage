@@ -1,0 +1,44 @@
+{
+  "groups": [
+    {
+      "displayName": "Gemini",
+      "buckets": [
+        {
+          "bucketId": "gemini-5h",
+          "remainingFraction": 0.63,
+          "window": "5h",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    },
+    {
+      "displayName": "Claude / GPT",
+      "buckets": [
+        {
+          "bucketId": "3p-5h",
+          "remainingFraction": 0.4,
+          "window": "5h",
+          "resetTime": "2026-11-25T05:00:00Z"
+        },
+        {
+          "bucketId": "3p-weekly",
+          "remainingFraction": 0.9,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    },
+    {
+      "displayName": "Gemini 4 Argon",
+      "buckets": [
+        {
+          "bucketId": "argon-pool-v4",
+          "remainingFraction": 0.75,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z",
+          "disabled": false
+        }
+      ]
+    }
+  ]
+}

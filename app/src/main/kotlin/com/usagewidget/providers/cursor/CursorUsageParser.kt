@@ -122,13 +122,16 @@ object CursorUsageParser {
             else -> true
         }
 
+        val onDemandDisabled = root.obj("onDemandSettings", "on_demand_settings")?.bool("enabled") == false ||
+            root.obj("onDemand", "on_demand")?.bool("enabled") == false
         return CursorGrokUsage(
             usedPercent = used,
             resetsAtEpochMs = resetMs,
             hasIncludedAllowance = hasAllowance,
             planLabel = root.str("grokPlanLabel", "grok_plan_label", "cursorPlanName", "cursor_plan_name"),
             windowStartEpochMs = startMs,
-            onDemand = OnDemandSpend.fromSandUsage(root)
+            onDemand = OnDemandSpend.fromSandUsage(root),
+            onDemandDisabled = onDemandDisabled
         )
     }
 
@@ -180,7 +183,7 @@ object CursorUsageParser {
                 windowLength = PacingPolicy.GROK_PERIOD_MS
             )
         }
-        val grokOnDemand = grok?.onDemand ?: plan?.onDemand
+        val grokOnDemand = if (grok?.onDemandDisabled == true) null else grok?.onDemand ?: plan?.onDemand
         grokOnDemand?.toMeter("cursor.grok_on_demand")?.let { meters += it }
         val errors = listOfNotNull(
             planError?.let { "Plan: $it" },
@@ -257,7 +260,8 @@ data class CursorGrokUsage(
     val hasIncludedAllowance: Boolean,
     val planLabel: String?,
     val windowStartEpochMs: Long? = null,
-    val onDemand: OnDemandSpend? = null
+    val onDemand: OnDemandSpend? = null,
+    val onDemandDisabled: Boolean = false
 )
 
 /**

@@ -61,6 +61,7 @@ public sealed class AppSettings
     public bool QuotaCodexFiveHourEnabled { get => _state.QuotaCodexFiveHourEnabled; set => Set(s => s with { QuotaCodexFiveHourEnabled = value }); }
     public bool QuotaCodexWeeklyEnabled { get => _state.QuotaCodexWeeklyEnabled; set => Set(s => s with { QuotaCodexWeeklyEnabled = value }); }
     public bool QuotaClaudeFiveHourEnabled { get => _state.QuotaClaudeFiveHourEnabled; set => Set(s => s with { QuotaClaudeFiveHourEnabled = value }); }
+    public bool QuotaGeminiEnabled { get => _state.QuotaGeminiEnabled; set => Set(s => s with { QuotaGeminiEnabled = value }); }
     public bool QuotaClaudeWeeklyEnabled { get => _state.QuotaClaudeWeeklyEnabled; set => Set(s => s with { QuotaClaudeWeeklyEnabled = value }); }
     public bool ShowCursorOnDemand { get => _state.ShowCursorOnDemand; set => Set(s => s with { ShowCursorOnDemand = value }); }
     public bool ShowGrokOnDemand { get => _state.ShowGrokOnDemand; set => Set(s => s with { ShowGrokOnDemand = value }); }
@@ -76,6 +77,25 @@ public sealed class AppSettings
         var set = HiddenWidgetBars.ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (visible ? !set.Remove(meterId) : !set.Add(meterId)) return;
         Set(s => s with { HiddenWidgetBars = set.OrderBy(x => x, StringComparer.Ordinal).ToList() });
+    }
+
+    /// <summary>Software order on the mini panel and tray popup (see <see cref="WidgetBars"/>).</summary>
+    public IReadOnlyList<SoftwareSectionId> WidgetSectionOrder =>
+        WidgetBars.ParseSectionOrder(_state.WidgetSectionOrder);
+
+    public void SetWidgetSectionOrder(IEnumerable<SoftwareSectionId> order)
+    {
+        var next = WidgetBars.NormalizeSectionOrder(order);
+        if (_state.WidgetSectionOrder is not null && WidgetSectionOrder.SequenceEqual(next)) return;
+        Set(s => s with { WidgetSectionOrder = next.Select(x => x.Wire()).ToList() });
+    }
+
+    public void MoveWidgetSection(SoftwareSectionId section, int delta)
+    {
+        var current = WidgetSectionOrder;
+        var next = WidgetBars.MoveSection(current, section, delta);
+        if (current.SequenceEqual(next)) return;
+        Set(s => s with { WidgetSectionOrder = next.Select(x => x.Wire()).ToList() });
     }
 
     public AlertPreferences AlertPreferencesValue() => new(
@@ -97,6 +117,8 @@ public sealed class AppSettings
         if (QuotaCodexWeeklyEnabled) enabled.Add(QuotaRuleId.CodexWeekly.Wire());
         if (QuotaClaudeFiveHourEnabled) enabled.Add(QuotaRuleId.ClaudeFiveHour.Wire());
         if (QuotaClaudeWeeklyEnabled) enabled.Add(QuotaRuleId.ClaudeWeekly.Wire());
+        if (QuotaGeminiEnabled)
+            foreach (var rule in QuotaRuleIds.All.Where(r => r.Section() == SoftwareSectionId.Gemini)) enabled.Add(rule.Wire());
         return new QuotaThresholdPreferences(
             QuotaAlertsEnabled,
             QuotaThresholds.ParseCsv(QuotaThresholdsCsv),
@@ -174,7 +196,9 @@ public sealed record SettingsState(
     Dictionary<string, QuotaThresholdState>? QuotaFiredStates = null,
     bool ShowCursorOnDemand = true,
     bool ShowGrokOnDemand = true,
-    List<string>? HiddenWidgetBars = null);
+    List<string>? HiddenWidgetBars = null,
+    bool QuotaGeminiEnabled = false,
+    List<string>? WidgetSectionOrder = null);
 
 public interface ISettingsStore
 {

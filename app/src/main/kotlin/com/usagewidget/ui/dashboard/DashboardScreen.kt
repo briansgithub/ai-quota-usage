@@ -124,6 +124,7 @@ fun DashboardScreen(
             onGrok = viewModel::setShowGrokOnDemand,
             onOnlyUsageRemaining = viewModel::setOnlyUsageRemaining,
             onWidgetBar = viewModel::setWidgetBarVisible,
+            onMoveWidgetSection = viewModel::moveWidgetSection,
             onDismiss = { settingsOpen = false }
         )
     }
@@ -177,6 +178,7 @@ private fun OnDemandSettingsDialog(
     onGrok: (Boolean) -> Unit,
     onOnlyUsageRemaining: (Boolean) -> Unit,
     onWidgetBar: (String, Boolean) -> Unit,
+    onMoveWidgetSection: (SoftwareSectionId, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     // Wider than the platform default so each service's bars fit on one row.
@@ -197,6 +199,7 @@ private fun OnDemandSettingsDialog(
                     onShowGrokOnDemand = onGrok,
                     onOnlyUsageRemaining = onOnlyUsageRemaining,
                     onWidgetBar = onWidgetBar,
+                    onMoveWidgetSection = onMoveWidgetSection,
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
@@ -467,10 +470,11 @@ fun UsageBar(meter: UsageMeter, nowMs: Long) {
             )
         }
         if (!meter.isCapBar && expected != null) {
-            val tickX = maxWidth * (expected.coerceIn(0.0, 100.0) / 100.0).toFloat()
+            val tickX = (maxWidth * (expected.coerceIn(0.0, 100.0) / 100.0).toFloat() - 1.dp)
+                .coerceIn(0.dp, (maxWidth - 2.dp).coerceAtLeast(0.dp))
             Box(
                 modifier = Modifier
-                    .offset(x = tickX - 1.dp)
+                    .offset(x = tickX)
                     .width(2.dp)
                     .fillMaxHeight()
                     .background(Color(0xFFF5F5F5))
@@ -522,6 +526,7 @@ private fun signInLabel(section: SoftwareSection): String = when (section.id) {
     SoftwareSectionId.GROK_BOT -> "Sign in to Cursor"
     SoftwareSectionId.CODEX -> "Sign in to ChatGPT"
     SoftwareSectionId.CLAUDE -> "Sign in to Claude"
+    SoftwareSectionId.GEMINI -> "Sign in with Google (Antigravity)"
     SoftwareSectionId.CURSOR -> "Sign in"
 }
 

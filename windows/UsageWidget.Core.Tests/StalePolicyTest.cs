@@ -98,6 +98,29 @@ public class StalePolicyTest
         Assert.False(view.IsStale);
     }
 
+    [Fact]
+    public void ResetPassedSinceLastSuccessMarksAmberStaleUntilRefreshed()
+    {
+        var lastSuccess = Now - 10 * 60_000L;
+        var resetAt = Now - 60_000L;
+        var meters = new[] { new UsageMeter("openai.five_hour", "5-hour", UsedPercent: 100.0, RemainingPercent: 0.0, ResetsAtEpochMs: resetAt) };
+        var preRefresh = new SectionHealth("codex", LastAttemptEpochMs: lastSuccess, LastSuccessEpochMs: lastSuccess,
+            LastOutcome: "SUCCESS", LastGoodMeters: meters, SignedIn: true);
+        var stale = StalePolicy.Evaluate(preRefresh, Now);
+        Assert.True(stale.IsStale);
+        Assert.Equal(StaleSeverity.Amber, stale.Severity);
+        Assert.Equal("Reset passed", stale.ShortReason);
+        Assert.False(stale.ShouldNotify);
+
+        var postRefresh = preRefresh with
+        {
+            LastAttemptEpochMs = Now,
+            LastSuccessEpochMs = Now,
+            LastGoodMeters = new[] { new UsageMeter("openai.five_hour", "5-hour", UsedPercent: 0.0, RemainingPercent: 100.0, ResetsAtEpochMs: Now + PacingPolicy.WindowMs) }
+        };
+        Assert.False(StalePolicy.Evaluate(postRefresh, Now).IsStale);
+    }
+
     private static SectionHealth Healthy(long lastSuccess, FetchOutcome outcome, string? shortReason = null, int? httpStatus = null) => new(
         "cursor",
         LastAttemptEpochMs: Now - 30_000L,

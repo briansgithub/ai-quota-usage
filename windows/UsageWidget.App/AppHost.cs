@@ -32,6 +32,7 @@ internal sealed class AppHost : IDisposable
     private int _hoverY;
     private long _nextRefreshAt;
     private bool _busy;
+    private bool _pendingWakeRefresh;
     private bool _miniInTray;
     private bool _dashboardInTray;
     public bool IsExiting { get; private set; }
@@ -71,11 +72,10 @@ internal sealed class AppHost : IDisposable
     {
         if (_busy || IsExiting) return;
         _busy = true;
+        var runPending = false;
         try
         {
             await _repo.RefreshAsync(allowHtmlFallback: true);
-            Settings.ArmNextRefreshFromNow(Now());
-            _nextRefreshAt = Settings.NextRefreshAtEpochMs;
         }
         catch (Exception ex)
         {
@@ -83,9 +83,15 @@ internal sealed class AppHost : IDisposable
         }
         finally
         {
+            Settings.ArmNextRefreshFromNow(Now());
+            _nextRefreshAt = Settings.NextRefreshAtEpochMs;
             _busy = false;
+            runPending = _pendingWakeRefresh && !IsExiting;
+            _pendingWakeRefresh = false;
             Render();
         }
+        if (runPending)
+            _ = RefreshNow();
     }
 
     public void OpenDashboard()
@@ -201,6 +207,13 @@ internal sealed class AppHost : IDisposable
 
     public void OpenSignIn(ProviderId provider, SoftwareSectionId sectionId, bool reauth)
     {
+        if (provider == ProviderId.Gemini)
+        {
+            _repo.ConnectGemini();
+            System.Windows.MessageBox.Show("Sign in using Antigravity on this PC, then refresh Usage Widget. Credentials are read from Windows Credential Manager or your local Antigravity files; the source credentials are never changed.", "Gemini (Antigravity)");
+            _ = RefreshNow();
+            return;
+        }
         var win = new SignInWindow(this, provider, sectionId, reauth);
         win.Show();
     }
@@ -299,7 +312,11 @@ internal sealed class AppHost : IDisposable
         {
             due = _wakes.Where(w => w.AtEpochMs <= now && _firedWakes.Add(w.UniqueName)).ToList();
         }
-        if (due.Count > 0) _ = RefreshNow();
+        if (due.Count > 0)
+        {
+            if (_busy) _pendingWakeRefresh = true;
+            else _ = RefreshNow();
+        }
         ConsumeTestNotificationFlag();
         Render();
     }
@@ -344,6 +361,7 @@ internal sealed class AppHost : IDisposable
         menu.Items.Add("Sign in to Cursor", null, (_, _) => OpenSignIn(ProviderId.Cursor, SoftwareSectionId.Cursor, false));
         menu.Items.Add("Sign in to Cursor for Grok Bot", null, (_, _) => OpenSignIn(ProviderId.Cursor, SoftwareSectionId.GrokBot, false));
         menu.Items.Add("Sign in to ChatGPT for Codex", null, (_, _) => OpenSignIn(ProviderId.OpenAi, SoftwareSectionId.Codex, false));
+        menu.Items.Add("Connect Gemini (Antigravity)", null, (_, _) => OpenSignIn(ProviderId.Gemini, SoftwareSectionId.Gemini, false));
         menu.Items.Add("Sign in to Claude", null, (_, _) => OpenSignIn(ProviderId.Claude, SoftwareSectionId.Claude, false));
         menu.Items.Add(new Forms.ToolStripSeparator());
         _alwaysOnTopItem = new Forms.ToolStripMenuItem("Always on top") { Checked = Settings.AlwaysOnTop, CheckOnClick = true };
@@ -382,7 +400,7 @@ internal sealed class AppHost : IDisposable
                 _hoverY = y;
                 _haveHoverPoint = true;
             }
-            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars);
+            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars, Settings.WidgetSectionOrder);
             var wasHidden = !_glance!.IsVisible;
             if (!SameGlance(_shownGlance, model))
             {

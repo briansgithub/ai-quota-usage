@@ -12,7 +12,7 @@ public class UsageSectionsTest
     public void EmptySnapshotAlwaysHasFourSoftwareSections()
     {
         var sections = UsageSections.From(UsageSnapshot.Empty(0L));
-        Assert.Equal(new[] { "Cursor", "Grok Bot", "Codex", "Claude" }, sections.Select(s => s.Id.Title()).ToArray());
+        Assert.Equal(new[] { "Cursor", "Grok Bot", "Codex", "Claude", "Gemini" }, sections.Select(s => s.Id.Title()).ToArray());
         Assert.Equal(ProviderId.Cursor, sections[0].SignInProvider);
         Assert.Equal(ProviderId.Cursor, sections[1].SignInProvider);
         Assert.Equal(ProviderId.OpenAi, sections[2].SignInProvider);

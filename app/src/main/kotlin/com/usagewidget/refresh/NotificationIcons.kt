@@ -23,9 +23,11 @@ object NotificationIcons {
         SoftwareSectionId.GROK_BOT -> R.drawable.ic_notify_grok
         SoftwareSectionId.CODEX -> R.drawable.ic_notify_openai
         SoftwareSectionId.CLAUDE -> R.drawable.ic_notify_claude
+        SoftwareSectionId.GEMINI -> R.drawable.ic_notify_gemini
     }
 
     private fun brandColor(section: SoftwareSectionId): Int = when (section) {
+        SoftwareSectionId.GEMINI -> Color.parseColor("#4285F4")
         SoftwareSectionId.CLAUDE -> Color.parseColor("#D97757")
         SoftwareSectionId.CODEX, SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT -> Color.BLACK
     }

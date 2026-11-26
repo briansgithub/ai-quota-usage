@@ -11,6 +11,7 @@ import com.usagewidget.providers.openai.OpenAiEndpoints
  */
 object SessionPaste {
     fun parse(provider: ProviderId, raw: String): Map<String, String> {
+        if (provider == ProviderId.GEMINI) return emptyMap()
         var text = raw.trim().trim('"')
         if (text.startsWith("Cookie:", ignoreCase = true)) {
             text = text.substringAfter(':').trim()
@@ -28,5 +29,6 @@ object SessionPaste {
         ProviderId.CURSOR -> CursorEndpoints.SESSION_COOKIE
         ProviderId.OPENAI -> OpenAiEndpoints.SESSION_COOKIE_PREFIX
         ProviderId.CLAUDE -> ClaudeEndpoints.SESSION_COOKIE
+        ProviderId.GEMINI -> error("Gemini uses OAuth, not cookies")
     }
 }

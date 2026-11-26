@@ -15,6 +15,8 @@ public static class PaceWindows
         "openai.thirty_day" => 30L * 24 * 60 * 60 * 1000,
         ClaudeMeterIds.FiveHour => ClaudeMeterIds.FiveHourMs,
         ClaudeMeterIds.Weekly or ClaudeMeterIds.WeeklyOpus or ClaudeMeterIds.WeeklySonnet => ClaudeMeterIds.WeekMs,
+        "gemini.gemini-5h" or "gemini.3p-5h" => GeminiUsageParser.FiveHours,
+        "gemini.gemini-weekly" or "gemini.3p-weekly" or "gemini.argon-weekly" => GeminiUsageParser.Week,
         "cursor.grok_bot" => PacingPolicy.GrokPeriodMs,
         "cursor.models" or "cursor.other" => PacingPolicy.CursorPeriodMs,
         _ => null

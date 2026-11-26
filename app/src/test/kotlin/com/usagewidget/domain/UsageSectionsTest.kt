@@ -15,7 +15,7 @@ class UsageSectionsTest {
     fun emptySnapshotAlwaysHasFourSoftwareSections() {
         val sections = UsageSections.from(UsageSnapshot.empty(0L))
         assertEquals(
-            listOf("Cursor", "Grok Bot", "Codex", "Claude"),
+            listOf("Cursor", "Grok Bot", "Codex", "Claude", "Gemini"),
             sections.map { it.id.title }
         )
         assertEquals(ProviderId.CURSOR, sections[0].signInProvider)

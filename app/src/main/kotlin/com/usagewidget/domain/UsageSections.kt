@@ -6,7 +6,8 @@ enum class SoftwareSectionId(val title: String, val wireName: String) {
     CURSOR("Cursor", "cursor"),
     GROK_BOT("Grok Bot", "grok_bot"),
     CODEX("Codex", "codex"),
-    CLAUDE("Claude", "claude");
+    CLAUDE("Claude", "claude"),
+    GEMINI("Gemini", "gemini");
 
     companion object {
         fun fromWire(value: String): SoftwareSectionId =
@@ -62,7 +63,30 @@ object UsageSections {
             cursorSection(cursor, hydrated.health(SoftwareSectionId.CURSOR), nowMs),
             grokSection(cursor, hydrated.health(SoftwareSectionId.GROK_BOT), nowMs),
             codexSection(openai, hydrated.health(SoftwareSectionId.CODEX), nowMs),
-            claudeSection(claude, hydrated.health(SoftwareSectionId.CLAUDE), nowMs)
+            claudeSection(claude, hydrated.health(SoftwareSectionId.CLAUDE), nowMs),
+            geminiSection(hydrated.provider(ProviderId.GEMINI), hydrated.health(SoftwareSectionId.GEMINI), nowMs)
+        )
+    }
+
+    private fun geminiSection(
+        gemini: ProviderSnapshot?,
+        health: SectionHealth,
+        nowMs: Long
+    ): SoftwareSection {
+        val status = gemini?.providerStatus ?: ProviderStatus.UNSIGNED
+        val sourceMeters = gemini?.meters.orEmpty().ifEmpty {
+            if (health.outcomeEnum == FetchOutcome.SUCCESS) emptyList() else health.lastGoodMeters
+        }
+        val stale = health.staleView(nowMs)
+        return SoftwareSection(
+            id = SoftwareSectionId.GEMINI,
+            signInProvider = ProviderId.GEMINI,
+            status = status,
+            subtitle = gemini?.planLabel ?: health.lastGoodPlanLabel,
+            error = stale.shortReason ?: gemini?.error,
+            meters = sourceMeters,
+            health = health,
+            stale = stale
         )
     }
 

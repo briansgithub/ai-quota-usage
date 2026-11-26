@@ -8,12 +8,14 @@ object SnapshotMerger {
         ProviderId.CURSOR -> listOf(SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT)
         ProviderId.OPENAI -> listOf(SoftwareSectionId.CODEX)
         ProviderId.CLAUDE -> listOf(SoftwareSectionId.CLAUDE)
+        ProviderId.GEMINI -> listOf(SoftwareSectionId.GEMINI)
     }
 
     private fun providerOf(section: SoftwareSectionId): ProviderId = when (section) {
         SoftwareSectionId.CURSOR, SoftwareSectionId.GROK_BOT -> ProviderId.CURSOR
         SoftwareSectionId.CODEX -> ProviderId.OPENAI
         SoftwareSectionId.CLAUDE -> ProviderId.CLAUDE
+        SoftwareSectionId.GEMINI -> ProviderId.GEMINI
     }
 
     /** Cursor + OpenAI only; any other provider keeps its previous state. */

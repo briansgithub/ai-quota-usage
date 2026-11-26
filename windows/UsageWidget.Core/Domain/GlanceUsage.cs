@@ -27,11 +27,17 @@ public static class GlanceUsage
 {
     public const int TooltipMaxChars = 127;
 
-    public static GlanceModel From(UsageSnapshot snapshot, long nowMs, bool showCursorOnDemand = true, bool showGrokOnDemand = true, IReadOnlySet<string>? hiddenBars = null)
+    public static GlanceModel From(
+        UsageSnapshot snapshot,
+        long nowMs,
+        bool showCursorOnDemand = true,
+        bool showGrokOnDemand = true,
+        IReadOnlySet<string>? hiddenBars = null,
+        IReadOnlyList<SoftwareSectionId>? sectionOrder = null)
     {
         var lines = new List<GlanceLine>();
         var hadBar = false;
-        foreach (var section in WidgetBars.Apply(OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), showCursorOnDemand, showGrokOnDemand), hiddenBars))
+        foreach (var section in WidgetBars.Apply(OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), showCursorOnDemand, showGrokOnDemand), hiddenBars, sectionOrder))
         {
             foreach (var meter in section.MeterList)
             {
@@ -74,6 +80,7 @@ public static class GlanceUsage
         ClaudeMeterIds.Weekly => "Claude Weekly",
         ClaudeMeterIds.WeeklyOpus => "Claude Opus",
         ClaudeMeterIds.WeeklySonnet => "Claude Sonnet",
+        _ when section == SoftwareSectionId.Gemini => meter.Title,
         _ => string.IsNullOrWhiteSpace(meter.Title) ? section.Title() : $"{section.Title()} {meter.Title}"
     };
 

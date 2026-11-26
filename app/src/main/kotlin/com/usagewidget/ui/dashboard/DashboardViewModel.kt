@@ -102,6 +102,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         repo.settings().quotaClaudeFiveHourEnabled = enabled
     }
 
+    fun setQuotaGeminiEnabled(enabled: Boolean) { repo.settings().quotaGeminiEnabled = enabled }
+
     fun setQuotaClaudeWeeklyEnabled(enabled: Boolean) {
         repo.settings().quotaClaudeWeeklyEnabled = enabled
     }
@@ -112,6 +114,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setWidgetBarVisible(meterId: String, visible: Boolean) {
         repo.settings().setWidgetBarVisible(meterId, visible)
+        pushWidget()
+    }
+
+    fun moveWidgetSection(section: com.usagewidget.domain.SoftwareSectionId, delta: Int) {
+        repo.settings().moveWidgetSection(section, delta)
         pushWidget()
     }
 

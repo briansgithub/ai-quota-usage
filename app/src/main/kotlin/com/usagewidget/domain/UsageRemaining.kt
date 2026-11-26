@@ -80,6 +80,11 @@ object UsageRemaining {
             " · " in meter.title -> "codex:" + meter.title.substringBefore(" · ")
             else -> meter.id
         }
+        SoftwareSectionId.GEMINI -> when (meter.id) {
+            "gemini.gemini-5h", "gemini.gemini-weekly" -> "gemini:main"
+            "gemini.3p-5h", "gemini.3p-weekly" -> "gemini:3p"
+            else -> meter.id
+        }
         else -> meter.id
     }
 }

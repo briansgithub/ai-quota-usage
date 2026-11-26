@@ -1,0 +1,15 @@
+{
+  "groups": [
+    {
+      "displayName": "Third party",
+      "buckets": [
+        {
+          "bucketId": "3p-5h",
+          "remainingFraction": 0.6,
+          "window": "5h",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    }
+  ]
+}

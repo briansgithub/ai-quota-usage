@@ -5,7 +5,8 @@ import kotlinx.serialization.Serializable
 enum class ProviderId(val wireName: String, val displayName: String) {
     CURSOR("cursor", "Cursor"),
     OPENAI("openai", "ChatGPT / Codex"),
-    CLAUDE("claude", "Claude");
+    CLAUDE("claude", "Claude"),
+    GEMINI("gemini", "Gemini (Antigravity)");
 
     companion object {
         fun fromWire(value: String): ProviderId =
@@ -19,6 +20,8 @@ data class DisplayPreferences(
     val showGrokOnDemand: Boolean = true,
     /** Meter ids hidden on the home-screen widget (see [WidgetBars]). */
     val hiddenWidgetBars: Set<String> = emptySet(),
+    /** Software order on the home-screen widget (see [WidgetBars]). */
+    val widgetSectionOrder: List<SoftwareSectionId> = WidgetBars.defaultSectionOrder,
     /** Hide bars with no quota left, in the app and on the widget (see [UsageRemaining]). */
     val onlyUsageRemaining: Boolean = false
 )

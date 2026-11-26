@@ -6,16 +6,27 @@ A standalone Android app for a **Google Pixel 7a (Android 14+)** that shows curr
 2. **Grok Bot** — weekly % used and reset (same Cursor spending page / sign-in), plus the same on-demand dollar bar when a cap is set
 3. **Codex** — windows the ChatGPT Codex usage page actually returns (5-hour, weekly, and/or 30-day), plus code-review / extra limits and credits when present, and any on-demand manual full resets from `chatgpt.com/codex/settings/usage`
 
-Everything runs on the phone. There is no backend, no AI agent, and no cloud routine. You sign in to each site in an in-app WebView; the app keeps the session cookies and reads the same JSON those dashboards already call.
+4. **Claude** ? session and weekly usage from claude.ai
+5. **Gemini (Antigravity)** ? 5-hour and weekly usage, plus third-party and Argon weekly pools when available
+
+Everything runs on the phone. There is no backend, no AI agent, and no cloud routine. Cookie-based providers use an in-app WebView; Gemini uses an external browser OAuth flow. For cookie-based providers, the app keeps the session cookies and reads the same JSON those dashboards already call.
 
 Times are shown in **America/New_York**.
 
-A native **Windows 10/11 x64** port lives in [`windows/`](windows/README.md) (tray + mini panel). Android **1.5.2** matches those **percent used** labels and pace-relative red/white/green bars, plus an extra **on-demand** dollar-cap bar for Cursor and Grok Bot (reversed green→white→red, no pace tick). Wire percents are already 0–100 (a value of `0.71` is 0.71% used, not 71%). Grok Bot is not a third login: it uses the Cursor session on both Android and Windows. Do not mix the Android and Windows build steps.
+A native **Windows 10/11 x64** port lives in [`windows/`](windows/README.md) (tray + mini panel). Android **1.6.0** matches those **percent used** labels and pace-relative red/white/green bars, plus an extra **on-demand** dollar-cap bar for Cursor and Grok Bot (reversed green→white→red, no pace tick). Wire percents are already 0–100 (a value of `0.71` is 0.71% used, not 71%). Grok Bot is not a third login: it uses the Cursor session on both Android and Windows. Do not mix the Android and Windows build steps.
+
+## Gemini (Antigravity)
+
+Android: choose **Sign in with Google (Antigravity)**. The installed-app flow uses browser OAuth, a loopback callback, state validation, and PKCE. Access/refresh tokens stay in the existing encrypted app preferences. Windows reads `.gemini/oauth_creds.json` and JSON credentials under `.gemini/antigravity*` without modifying those files; refreshed tokens are cached in the app's DPAPI storage. Disconnecting in Usage Widget leaves the external login untouched.
+
+Both clients query Cloud Code directly, daily before production, and prefer daily's exact bucket IDs. Model fallback supplies only the Gemini 5-hour bar. Gemini threshold notifications default off and honor the master switch. The bars use the existing pace color/tick calculation; Gemini does not add use-it-or-lose-it reminder scheduling.
+
+The undocumented API and public installed-app OAuth client are described in the [Antigravity reference](https://raw.githubusercontent.com/PowerUserZ/OpenTokenUsage/main/docs/providers/antigravity.md). To keep the published client credential out of source and builds, token exchange retrieves it over HTTPS into memory from that reference; sign-in/refresh therefore also depends on its availability and format. Live Android OAuth acceptance and account-specific quota responses still require device/account verification; fixtures are synthetic.
 
 ## What you get
 
 - One home-screen **Jetpack Glance** widget (dark, Cursor-dashboard look): three labeled sections (**Cursor**, **Grok Bot**, **Codex**) with extra space before each title. Resize it; a scrolling list keeps every meter, including Codex Weekly. Compact tiles drop the progress bars but still show `% used` and `Reset: Mon 3 PM (2d 5h)`.
-- An in-app dashboard with the same three sections, pull-to-refresh, and per-service sign-in
+- An in-app dashboard with the same service sections, pull-to-refresh, and per-service sign-in
 - WorkManager unique periodic refresh every **15 minutes** (Android’s minimum), plus tap-to-refresh on the widget. A faint `next MM:SS` countdown sits in the **widget footer** (Chronometer) and in the app; WorkManager can drift, and the countdown stays at `00:00` until the next update instead of going negative.
 - Last-updated time: the dashboard shows the relative stamp plus America/New_York clock time. The widget header drops that stamp and keeps ↻ refresh (network, no HTML fallback, `Cache-Control: no-store` + OkHttp `FORCE_NETWORK`) with a settings gear at the upper right that opens the on-demand display toggles.
 - If a refresh fails, **last-good numbers stay on screen** and that section is marked stale (warning icon, amber/red header, `Last updated Xh ago`, short reason such as `Sign-in expired`, `Network error`, `Data format changed`, `HTTP 503`). The widget title also shows ⚠ if any section is stale. Data older than two refresh intervals (~30 min) is stale even without an explicit error. A **successful** fetch always replaces last-good meters, including a post-reset drop to 0% used or an empty Grok list — last-good is not reused on success.

@@ -216,12 +216,14 @@ fun loginStartUrl(provider: ProviderId): String = when (provider) {
     ProviderId.CURSOR -> CursorEndpoints.LOGIN_PAGE
     ProviderId.OPENAI -> OpenAiEndpoints.LOGIN_PAGE
     ProviderId.CLAUDE -> ClaudeEndpoints.LOGIN_PAGE
+    ProviderId.GEMINI -> error("Gemini uses external browser OAuth")
 }
 
 fun loginFallbackUrl(provider: ProviderId): String = when (provider) {
     ProviderId.CURSOR -> CursorEndpoints.LOGIN_PAGE
     ProviderId.OPENAI -> OpenAiEndpoints.LOGIN_FALLBACK
     ProviderId.CLAUDE -> ClaudeEndpoints.LOGIN_PAGE
+    ProviderId.GEMINI -> error("Gemini uses external browser OAuth")
 }
 
 fun landedOnProviderHome(provider: ProviderId, url: String): Boolean {
@@ -237,6 +239,7 @@ fun landedOnProviderHome(provider: ProviderId, url: String): Boolean {
                 !lower.contains("/auth") &&
                 !lower.contains("login") &&
                 !lower.contains("log-in")
+        ProviderId.GEMINI -> false
         ProviderId.CLAUDE ->
             lower.contains("claude.ai") &&
                 !lower.contains("/login") &&

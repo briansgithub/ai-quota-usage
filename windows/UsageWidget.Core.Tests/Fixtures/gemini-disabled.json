@@ -1,0 +1,67 @@
+{
+  "groups": [
+    {
+      "displayName": "Gemini 4 Argon",
+      "buckets": [
+        {
+          "bucketId": "disabled-argon",
+          "remainingFraction": 0.5,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "displayName": "Gemini 4 Argon",
+      "buckets": [
+        {
+          "bucketId": "bad-flag",
+          "remainingFraction": 0.5,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z",
+          "disabled": "false"
+        }
+      ]
+    },
+    {
+      "displayName": "Gemini 4 Argon",
+      "buckets": [
+        {
+          "bucketId": "bad-window",
+          "remainingFraction": 0.5,
+          "window": "5h",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    },
+    {
+      "displayName": "Gemini 4 Argon",
+      "buckets": [
+        {
+          "bucketId": "a",
+          "remainingFraction": 0.5,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z"
+        },
+        {
+          "bucketId": "b",
+          "remainingFraction": 0.5,
+          "window": "weekly",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    },
+    {
+      "displayName": "Gemini",
+      "buckets": [
+        {
+          "bucketId": "gemini-5h",
+          "remainingFraction": 1.4,
+          "window": "5h",
+          "resetTime": "2026-11-25T05:00:00Z"
+        }
+      ]
+    }
+  ]
+}
