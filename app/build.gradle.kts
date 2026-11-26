@@ -23,8 +23,8 @@ android {
     applicationId = "com.usagewidget"
     minSdk = 34
     targetSdk = 36
-    versionCode = 21
-    versionName = "1.7.0"
+    versionCode = 22
+    versionName = "1.7.1"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 

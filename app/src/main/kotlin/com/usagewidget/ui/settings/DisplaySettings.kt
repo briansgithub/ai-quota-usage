@@ -90,7 +90,7 @@ fun DisplaySettings(
         }
         SettingsGroup(
             title = "Widget layout",
-            hint = "Off: bars grouped by software. On: grouped by limit length (5-hour, then weekly / monthly), then by software. Widget only."
+            hint = "Off: bars grouped by software. On: weekly / monthly limits first, then 5-hour; inside, software and bars behind even pace come first. Widget only."
         ) {
             ChipRow {
                 ToggleChip("Group by limit length", display.groupByLimit, onGroupByLimit)
