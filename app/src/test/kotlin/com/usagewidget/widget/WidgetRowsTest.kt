@@ -7,6 +7,7 @@ import com.usagewidget.domain.ProviderStatus
 import com.usagewidget.domain.SoftwareSection
 import com.usagewidget.domain.SoftwareSectionId
 import com.usagewidget.domain.UsageMeter
+import com.usagewidget.domain.UsageRemaining
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -42,6 +43,25 @@ class WidgetRowsTest {
         assertEquals(WidgetRow.Heading("Codex", software = true), rows[five + 1])
         assertEquals(WidgetRow.Reset(1000, indented = true), rows[five + 2])
         assertEquals(listOf("Codex"), rows.filterIsInstance<WidgetRow.Meter>().map { it.title })
+    }
+
+    @Test fun keepResetTimesShowsResetOfSpentCursorPoolWithoutDuplicatingPlanRow() {
+        val section = SoftwareSection(
+            SoftwareSectionId.CURSOR, ProviderId.CURSOR, ProviderStatus.OK,
+            meters = listOf(
+                UsageMeter(id = "cursor.models", title = "Models", usedPercent = 100.0, remainingPercent = 0.0, resetsAtEpochMs = 5000),
+                UsageMeter(id = "cursor.other", title = "Other models", usedPercent = 100.0, remainingPercent = 0.0, resetsAtEpochMs = 5000),
+                UsageMeter(id = "cursor.plan_reset", title = "Plan reset", resetsAtEpochMs = 5000)
+            )
+        )
+        val hidden = UsageRemaining.apply(listOf(section), enabled = true, dropSpentCards = true)
+        assertEquals(emptyList<WidgetRow.Reset>(), widgetRows(hidden, nowMs = 0).filterIsInstance<WidgetRow.Reset>())
+
+        val kept = UsageRemaining.apply(listOf(section), enabled = true, dropSpentCards = true, keepResetTimes = true)
+        val rows = widgetRows(kept, nowMs = 0)
+        assertEquals(emptyList<WidgetRow.Meter>(), rows.filterIsInstance<WidgetRow.Meter>())
+        assertEquals(listOf(5000L, 5000L), rows.filterIsInstance<WidgetRow.Reset>().map { it.at })
+        assertEquals(WidgetRow.Heading("Cursor", software = true), rows.first())
     }
 
     @Test fun identicalResetsShareOneCaptionWithinGemini() {

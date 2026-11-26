@@ -222,4 +222,82 @@ class UsageRemainingTest {
             ids(shown(s), SoftwareSectionId.GEMINI)
         )
     }
+
+    private fun keep(vararg sections: SoftwareSection, drop: Boolean = true) =
+        UsageRemaining.apply(sections.toList(), enabled = true, dropSpentCards = drop, keepResetTimes = true)
+
+    @Test
+    fun keepResetTimesOffMatchesDefault() {
+        val spent = section(SoftwareSectionId.CLAUDE, meter(ClaudeMeterIds.WEEKLY, 100.0).copy(resetsAtEpochMs = 9L))
+        assertTrue(shown(spent).isEmpty())
+        assertEquals(
+            shown(spent),
+            UsageRemaining.apply(listOf(spent), enabled = true, dropSpentCards = true, keepResetTimes = false)
+        )
+    }
+
+    @Test
+    fun keepResetTimesIgnoredWhenFilterIsOff() {
+        val spent = section(SoftwareSectionId.CLAUDE, meter(ClaudeMeterIds.WEEKLY, 100.0).copy(resetsAtEpochMs = 9L))
+        val result = UsageRemaining.apply(listOf(spent), enabled = false, dropSpentCards = true, keepResetTimes = true)
+        assertSame(spent, result.single())
+    }
+
+    @Test
+    fun keepResetTimesLeavesSpentWeeklyAsResetOnlyAndHidesItsFiveHour() {
+        val s = section(
+            SoftwareSectionId.CLAUDE,
+            meter(ClaudeMeterIds.FIVE_HOUR, 20.0).copy(resetsAtEpochMs = 3L),
+            meter(ClaudeMeterIds.WEEKLY, 100.0).copy(resetsAtEpochMs = 9L),
+            meter(ClaudeMeterIds.WEEKLY_SONNET, 30.0).copy(resetsAtEpochMs = 9L)
+        )
+        val claude = keep(s).single()
+        val weekly = claude.meters.single()
+        assertEquals(ClaudeMeterIds.WEEKLY, weekly.id)
+        assertTrue(weekly.spentShortWindow)
+        assertFalse(weekly.hasUsageBar)
+        assertEquals(9L, weekly.resetsAtEpochMs)
+    }
+
+    @Test
+    fun keepResetTimesWithoutAResetTimeStillHidesTheMeter() {
+        val s = section(SoftwareSectionId.CLAUDE, meter(ClaudeMeterIds.WEEKLY, 100.0))
+        assertTrue(keep(s).isEmpty())
+    }
+
+    @Test
+    fun keepResetTimesKeepsOtherGroupsBars() {
+        val s = section(
+            SoftwareSectionId.CODEX,
+            meter("openai.five_hour", 10.0).copy(resetsAtEpochMs = 3L),
+            meter("openai.weekly", 100.0).copy(resetsAtEpochMs = 9L),
+            meter("openai.code_review", 5.0)
+        )
+        val result = keep(s).single().meters
+        assertEquals(listOf("openai.weekly", "openai.code_review"), result.map { it.id })
+        assertTrue(result[0].spentShortWindow)
+        assertTrue(result[1].hasUsageBar)
+    }
+
+    @Test
+    fun keepResetTimesKeepsCursorPoolResetsAndStaysOnPartialSpend() {
+        val s = section(
+            SoftwareSectionId.CURSOR,
+            meter("cursor.models", 100.0).copy(resetsAtEpochMs = 5L),
+            meter("cursor.other", 40.0).copy(resetsAtEpochMs = 5L)
+        )
+        val result = keep(s).single().meters
+        assertTrue(result.first { it.id == "cursor.models" }.spentShortWindow)
+        assertTrue(result.first { it.id == "cursor.other" }.hasUsageBar)
+    }
+
+    @Test
+    fun keepResetTimesKeepsCardOfFullySpentCursor() {
+        val s = section(
+            SoftwareSectionId.CURSOR,
+            meter("cursor.models", 100.0).copy(resetsAtEpochMs = 5L),
+            meter("cursor.other", 101.0).copy(resetsAtEpochMs = 5L)
+        )
+        assertEquals(2, keep(s).single().meters.count { it.spentShortWindow })
+    }
 }

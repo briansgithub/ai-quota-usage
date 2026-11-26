@@ -138,6 +138,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         pushWidget()
     }
 
+    fun setKeepResetTimes(enabled: Boolean) {
+        repo.settings().keepResetTimes = enabled
+        pushWidget()
+    }
+
     fun setGroupByLimit(enabled: Boolean) {
         repo.settings().groupByLimit = enabled
         pushWidget()
