@@ -6,8 +6,6 @@ import com.usagewidget.domain.SoftwareSection
 import com.usagewidget.domain.SoftwareSectionId
 import com.usagewidget.domain.UsageMeter
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WidgetRowsTest {
@@ -22,20 +20,16 @@ class WidgetRowsTest {
         return widgetRows(listOf(section), nowMs = 0, groupByLimit = true)
     }
 
-    @Test fun singleLimitKeepsProviderAndWindowOnOneLine() {
-        val rows = grouped(meter("Weekly", 1000))
-        assertFalse(rows.any { it is WidgetRow.Header })
-        assertEquals("Codex · Weekly", rows.filterIsInstance<WidgetRow.Meter>().single().title)
+    @Test fun groupedWindowAppearsOnce() {
+        val rows = grouped(meter("Weekly", 1000).copy(id = "openai.weekly"))
+        assertEquals(listOf("Weekly"), rows.filterIsInstance<WidgetRow.Heading>().map { it.title })
+        assertEquals("Codex", rows.filterIsInstance<WidgetRow.Meter>().single().title)
     }
 
-    @Test fun onlyIdenticalResetTimesAreShared() {
-        val weekly = meter("Weekly", 1000)
-        val review = meter("Review", 1000)
-        val shared = grouped(weekly, review)
-        assertEquals(1000L, shared.filterIsInstance<WidgetRow.SharedReset>().single().at)
-        assertEquals(2, shared.filterIsInstance<WidgetRow.Meter>().count { !it.showReset })
-        val independent = grouped(weekly, review.copy(resetsAtEpochMs = 1001))
-        assertFalse(independent.any { it is WidgetRow.SharedReset })
-        assertTrue(independent.filterIsInstance<WidgetRow.Meter>().all { it.showReset })
+    @Test fun onlyNumericLimitsAppear() {
+        val rows = grouped(meter("Weekly", 1000), meter("Review", 1001),
+            UsageMeter(id = "reset", title = "Plan reset", resetsAtEpochMs = 1000))
+        assertEquals(listOf("Codex Weekly", "Review"), rows.filterIsInstance<WidgetRow.Meter>().map { it.title })
+        assertEquals(3, rows.size)
     }
 }

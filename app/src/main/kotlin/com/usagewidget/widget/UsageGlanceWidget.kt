@@ -22,7 +22,6 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
-import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -40,40 +39,29 @@ import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
+import androidx.glance.layout.size
 import androidx.glance.layout.padding
 import androidx.glance.layout.wrapContentHeight
-import androidx.glance.layout.wrapContentSize
-import androidx.glance.layout.wrapContentWidth
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import com.usagewidget.R
 import com.usagewidget.MainActivity
 import com.usagewidget.data.AppSettings
 import com.usagewidget.data.UsageRepository
 import com.usagewidget.domain.LimitGrouping
-import com.usagewidget.domain.LimitGroupEntry
 import com.usagewidget.domain.NyTimeAgo
 import com.usagewidget.domain.OnDemandDisplay
 import com.usagewidget.domain.UsageRemaining
 import com.usagewidget.domain.WidgetBars
-import com.usagewidget.domain.PaceUrgency
 import com.usagewidget.domain.PaceWindows
-import com.usagewidget.domain.PacingPlanner
-import com.usagewidget.domain.PacingPolicy
+import com.usagewidget.domain.ProviderId
 import com.usagewidget.domain.ProviderStatus
-import com.usagewidget.domain.RefreshSchedule
-import com.usagewidget.domain.ResetEmphasis
-import com.usagewidget.domain.ResetSegmentLook
-import com.usagewidget.domain.ResetUrgency
 import com.usagewidget.domain.SoftwareSection
-import com.usagewidget.domain.StaleSeverity
-import com.usagewidget.domain.StaleView
 import com.usagewidget.domain.UsageMeter
 import com.usagewidget.domain.UsageSections
 import com.usagewidget.domain.UsageSnapshot
 import com.usagewidget.refresh.UsageRefreshWorker
-import com.usagewidget.util.NyTime
-import com.usagewidget.util.ResetSegment
 
 class UsageGlanceWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
@@ -92,11 +80,8 @@ class UsageGlanceWidget : GlanceAppWidget() {
             val prefs = currentState<Preferences>()
             val snapshot = WidgetGlanceState.snapshotOf(prefs)
                 ?: UsageRepository.get(LocalContext.current).snapshot.value
-            val nextRefreshAt = WidgetGlanceState.nextRefreshOf(prefs)
-                ?: AppSettings.get(LocalContext.current).nextRefreshAtEpochMs.value
-            val percentPerWindow = AppSettings.get(LocalContext.current).percentPerFiveHourWindow
             GlanceTheme {
-                WidgetContent(snapshot, nextRefreshAt, percentPerWindow)
+                WidgetContent(snapshot)
             }
         }
     }
@@ -109,14 +94,9 @@ private val Muted = ColorProvider(Color(0xFF9A9A9A), Color(0xFF9A9A9A))
 private val Warn = ColorProvider(Color(0xFFE08B6E), Color(0xFFE08B6E))
 private val Amber = ColorProvider(Color(0xFFE6B84C), Color(0xFFE6B84C))
 private val Bright = ColorProvider(Color(0xFFF5F5F5), Color(0xFFF5F5F5))
-private val Imminent = ColorProvider(Color(0xFFFF7043), Color(0xFFFF7043))
 
 @Composable
-private fun WidgetContent(
-    snapshot: UsageSnapshot,
-    nextRefreshAt: Long,
-    percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW
-) {
+private fun WidgetContent(snapshot: UsageSnapshot) {
     val context = LocalContext.current
     val size = LocalSize.current
     val compact = size.height < 160.dp
@@ -142,8 +122,7 @@ private fun WidgetContent(
         enabled = settings.onlyUsageRemaining,
         dropSpentCards = true
     )
-    val anyStale = sections.any { it.stale.isStale }
-    val rows = widgetRows(sections, includePace = !compact, percentPerWindow, now, settings.groupByLimit)
+    val rows = widgetRows(sections, now, settings.groupByLimit)
 
     Column(
         modifier = GlanceModifier
@@ -157,32 +136,12 @@ private fun WidgetContent(
             modifier = GlanceModifier.fillMaxWidth().wrapContentHeight(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (anyStale) "Usage  ⚠" else "Usage",
-                style = TextStyle(
-                    color = if (sections.any { it.stale.isStale && it.stale.severity == StaleSeverity.RED }) {
-                        Warn
-                    } else if (anyStale) {
-                        Amber
-                    } else {
-                        TextOn
-                    },
-                    fontSize = if (compact) 14.sp else 16.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                modifier = GlanceModifier.wrapContentHeight()
-            )
+            Text("Quota used", style = TextStyle(color = Muted, fontSize = 12.sp))
             Spacer(GlanceModifier.defaultWeight())
-            Text(
-                text = "↻",
-                style = TextStyle(color = TextOn, fontSize = 16.sp),
-                modifier = GlanceModifier.wrapContentSize().clickable(actionRunCallback<RefreshAction>())
-            )
-            Text(
-                text = "⚙",
-                style = TextStyle(color = TextOn, fontSize = 16.sp),
-                modifier = GlanceModifier.wrapContentSize().padding(start = 4.dp).clickable(openSettings)
-            )
+            Image(ImageProvider(R.drawable.ic_widget_refresh), "Refresh",
+                GlanceModifier.size(32.dp).clickable(actionRunCallback<RefreshAction>()).padding(7.dp))
+            Image(ImageProvider(R.drawable.ic_widget_settings), "Widget settings",
+                GlanceModifier.size(32.dp).clickable(openSettings).padding(7.dp))
         }
         Spacer(GlanceModifier.height(if (compact) 4.dp else 6.dp))
         LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
@@ -191,29 +150,13 @@ private fun WidgetContent(
                 itemId = { index, row -> row.stableId(index) }
             ) { _, row ->
                 when (row) {
-                    is WidgetRow.Gap -> Spacer(GlanceModifier.height(if (compact) 8.dp else 12.dp))
-                    is WidgetRow.Header -> SectionHeader(row.title, row.stale, row.nested)
-                    is WidgetRow.GroupHeader -> GroupHeader(row.title)
-                    is WidgetRow.Meter -> MeterGlanceRow(row, now, compact, size.width)
-                    is WidgetRow.SharedReset -> ResetLine(
-                        NyTime.formatResetSegments(row.at, now, row.label), row.at, now
-                    )
+                    is WidgetRow.Heading -> GroupHeader(row.title)
+                    is WidgetRow.Meter -> MeterGlanceRow(row, now, size.width)
                     is WidgetRow.SignIn -> SignInRow(row.title, row.providerId)
-                    is WidgetRow.Message -> MessageRow(row.text, row.warn, row.emphasize, row.imminent)
+                    is WidgetRow.Message -> Text(row.text, style = TextStyle(color = Muted, fontSize = 12.sp))
                 }
                 Spacer(GlanceModifier.height(if (compact) 4.dp else 6.dp))
             }
-        }
-        val lastSuccess = RefreshSchedule.lastSuccessEpochMs(snapshot)
-        if (nextRefreshAt > 0L || lastSuccess > 0L) {
-            Spacer(GlanceModifier.height(4.dp))
-            AndroidRemoteViews(
-                remoteViews = NextRefreshCountdown.remoteViews(context, nextRefreshAt, lastSuccess, now),
-                modifier = GlanceModifier
-                    .wrapContentWidth()
-                    .wrapContentHeight()
-                    .height(16.dp)
-            )
         }
     }
 }
@@ -236,139 +179,76 @@ internal fun updatedAgoLabel(
 }
 
 internal sealed class WidgetRow {
-    data object Gap : WidgetRow()
-    data class Header(val title: String, val stale: StaleView, val nested: Boolean = false) : WidgetRow()
-    data class GroupHeader(val title: String) : WidgetRow()
-    data class Meter(val meter: UsageMeter, val title: String = meter.title, val showReset: Boolean = true) : WidgetRow()
-    data class SharedReset(val at: Long, val label: String) : WidgetRow()
+    data class Heading(val title: String) : WidgetRow()
+    data class Meter(val meter: UsageMeter, val title: String, val stale: Boolean) : WidgetRow()
     data class SignIn(val title: String, val providerId: String) : WidgetRow()
-    data class Message(
-        val text: String,
-        val warn: Boolean = false,
-        val emphasize: Boolean = false,
-        val imminent: Boolean = false
-    ) : WidgetRow()
+    data class Message(val text: String) : WidgetRow()
 
     fun stableId(index: Int): Long = when (this) {
-        is SharedReset -> 600L + index
-        is Gap -> 50L + index
-        is Header -> 100L + title.hashCode() + (if (nested) 7L + index else 0L)
-        is GroupHeader -> 150L + title.hashCode()
+        is Heading -> 100L + title.hashCode()
         is Meter -> 200L + meter.id.hashCode()
-        is SignIn -> 300L + providerId.hashCode()
+        is SignIn -> 300L + title.hashCode()
         is Message -> 400L + index
     }
 }
 
 internal fun widgetRows(
     sections: List<SoftwareSection>,
-    includePace: Boolean = false,
-    percentPerWindow: Double = PacingPolicy.DEFAULT_PERCENT_PER_WINDOW,
     nowMs: Long = System.currentTimeMillis(),
     groupByLimit: Boolean = false
-): List<WidgetRow> {
-    val rows = mutableListOf<WidgetRow>()
-    if (!groupByLimit) {
-        sections.forEachIndexed { index, section ->
-            if (index > 0) rows += WidgetRow.Gap
-            rows += WidgetRow.Header(section.id.title, section.stale)
-            appendSectionBody(rows, section, section.meters, primary = true, includePace, percentPerWindow, nowMs)
-        }
-        return rows
-    }
-    LimitGrouping.group(sections, nowMs).forEach { group ->
-        rows += WidgetRow.GroupHeader(group.kind.title)
-        group.entries.forEach { entry: LimitGroupEntry ->
-            val single = entry.meters.singleOrNull()
-            val inlineProvider = single != null && !entry.section.stale.isStale &&
-                (single.hasUsageBar || single.resetsAtEpochMs != null)
-            if (!inlineProvider) {
-                rows += WidgetRow.Header(entry.section.id.title, entry.section.stale, nested = true)
+): List<WidgetRow> = buildList {
+    // Reset-only and placeholder rows belong to the detailed dashboard.
+    val visible = sections.map { section -> section.copy(meters = section.meters.filter { it.hasUsageBar }) }
+    if (groupByLimit) {
+        for (group in LimitGrouping.group(visible, nowMs)) {
+            val lengths = group.entries.flatMap { it.meters }.map(LimitGrouping::windowLengthMs).distinct()
+            val window = when (lengths.singleOrNull()) {
+                5L * 3_600_000 -> "5h"
+                24L * 3_600_000 -> "Daily"
+                7L * 24 * 3_600_000 -> "Weekly"
+                else -> null
             }
-            appendSectionBody(rows, entry.section, entry.meters, entry.primary, includePace, percentPerWindow, nowMs, inlineProvider)
+            if (group.entries.any { it.meters.isNotEmpty() }) add(WidgetRow.Heading(window ?: group.kind.title))
+            for (entry in group.entries) addMeters(entry.section, entry.meters, window)
+        }
+    } else {
+        for (section in visible) addMeters(section, section.meters, null)
+    }
+
+    val signInProviders = mutableSetOf<ProviderId>()
+    for (section in visible) {
+        when {
+            section.status == ProviderStatus.UNSIGNED || section.status == ProviderStatus.NEEDS_SIGN_IN -> {
+                if (signInProviders.add(section.signInProvider)) {
+                    val title = if (section.signInProvider == ProviderId.CURSOR) "Cursor" else section.id.title
+                    add(WidgetRow.SignIn(title, section.signInProvider.wireName))
+                }
+            }
+            section.meters.isEmpty() && section.status == ProviderStatus.ERROR ->
+                add(WidgetRow.Message("${section.id.title} unavailable"))
+            section.meters.isEmpty() && section.status == ProviderStatus.LOADING ->
+                add(WidgetRow.Message("${section.id.title} loading"))
         }
     }
-    return rows
+    if (isEmpty()) add(WidgetRow.Message("No visible limits"))
 }
 
-/**
- * Rows under a software header. [meters] is the section's bars, or only the bars of one limit
- * group in group-by-limit mode; the card-level lines (stale notice, manual resets, pacing,
- * sign-in prompt) are added only for the [primary] entry so they appear once per software.
- */
-private fun appendSectionBody(
-    rows: MutableList<WidgetRow>,
-    section: SoftwareSection,
-    meters: List<UsageMeter>,
-    primary: Boolean,
-    includePace: Boolean,
-    percentPerWindow: Double,
-    nowMs: Long,
-    inlineProvider: Boolean = false
-) {
-    val hasData = meters.any { it.hasUsageBar || it.resetsAtEpochMs != null }
-    if (primary && section.stale.isStale) {
-        val line = listOfNotNull(section.stale.lastUpdatedLine, section.stale.shortReason)
-            .joinToString(" · ")
-        if (line.isNotBlank()) {
-            rows += WidgetRow.Message(line, warn = true)
+private fun MutableList<WidgetRow>.addMeters(section: SoftwareSection, meters: List<UsageMeter>, window: String?) {
+    meters.forEachIndexed { index, meter ->
+        val provider = section.id.title
+        val shortName = WidgetBars.catalog.firstOrNull { it.meterId == meter.id }?.label ?: meter.title
+        var name = shortName.replace("5-hour", "5h", ignoreCase = true)
+            .removePrefix("$provider ").trim()
+        if (window != null) {
+            name = name.split(' ').filterNot { it.equals(window, ignoreCase = true) }.joinToString(" ")
+            if (window == "5h" && name == "Session") name = ""
         }
-    }
-    if (hasData) {
-        val sharedReset = meters.first().resetsAtEpochMs?.takeIf { at ->
-            meters.size > 1 && meters.all { it.resetsAtEpochMs == at }
+        val label = when {
+            name.isEmpty() -> provider
+            index == 0 -> "$provider $name"
+            else -> name
         }
-        for (meter in meters) {
-            if (sharedReset != null && meter.id == "cursor.plan_reset" && !meter.hasUsageBar) continue
-            val provider = section.id.title
-            val title = if (inlineProvider && !meter.title.startsWith(provider, ignoreCase = true)) {
-                "$provider � ${meter.title}"
-            } else meter.title
-            rows += WidgetRow.Meter(meter, title, showReset = sharedReset == null)
-        }
-        if (sharedReset != null) {
-            val label = if (meters.any { it.id == "cursor.plan_reset" }) "Plan reset" else "All reset"
-            rows += WidgetRow.SharedReset(sharedReset, label)
-        }
-    }
-    if (!primary) return
-    section.manualResets?.displayLine()?.let { line ->
-        rows += WidgetRow.Message(line, warn = false, emphasize = true)
-    }
-    if (includePace) {
-        PacingPlanner.forSection(section, nowMs, percentPerWindow)?.let { pacing ->
-            rows += WidgetRow.Message(
-                text = pacing.line,
-                warn = pacing.urgency == PaceUrgency.TIGHT,
-                emphasize = pacing.urgency != PaceUrgency.OK,
-                imminent = pacing.urgency == PaceUrgency.CRITICAL ||
-                    pacing.urgency == PaceUrgency.IMPOSSIBLE
-            )
-        }
-    }
-    when (section.status) {
-        ProviderStatus.NEEDS_SIGN_IN, ProviderStatus.UNSIGNED -> {
-            if (!hasData && (section.id.title == "Codex" || section.id.title == "Claude")) {
-                meters.forEach { rows += WidgetRow.Meter(it) }
-            }
-            rows += WidgetRow.SignIn(
-                title = section.id.title,
-                providerId = section.signInProvider.wireName
-            )
-        }
-        ProviderStatus.ERROR -> {
-            if (!hasData) {
-                val message = section.error ?: "Could not load usage"
-                rows += WidgetRow.SignIn(
-                    title = "${section.id.title} · $message",
-                    providerId = section.signInProvider.wireName
-                )
-            }
-        }
-        ProviderStatus.LOADING -> {
-            rows += WidgetRow.Message("Loading…")
-        }
-        ProviderStatus.OK -> Unit
+        add(WidgetRow.Meter(meter, label, section.stale.isStale))
     }
 }
 
@@ -378,19 +258,6 @@ private fun GroupHeader(title: String) {
         text = title,
         modifier = GlanceModifier.padding(top = 4.dp),
         style = TextStyle(color = Bright, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-    )
-}
-
-@Composable
-private fun SectionHeader(title: String, stale: StaleView, nested: Boolean = false) {
-    val color = when {
-        !stale.isStale -> TextOn
-        stale.severity == StaleSeverity.RED -> Warn
-        else -> Amber
-    }
-    Text(
-        text = if (stale.isStale) "⚠  $title" else title,
-        style = TextStyle(color = color, fontSize = if (nested) 14.sp else 16.sp, fontWeight = FontWeight.Bold)
     )
 }
 
@@ -411,11 +278,7 @@ private fun SignInRow(title: String, providerId: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (title.contains("Sign in", ignoreCase = true) || title.contains("·")) {
-                title
-            } else {
-                "$title · Sign in"
-            },
+            text = "$title � Sign in",
             style = TextStyle(color = Warn, fontSize = 12.sp),
             modifier = GlanceModifier.defaultWeight()
         )
@@ -423,96 +286,21 @@ private fun SignInRow(title: String, providerId: String) {
 }
 
 @Composable
-private fun MessageRow(
-    text: String,
-    warn: Boolean,
-    emphasize: Boolean = false,
-    imminent: Boolean = false
-) {
-    val color = when {
-        imminent -> Imminent
-        warn -> Amber
-        emphasize -> TextOn
-        else -> Muted
-    }
-    Text(
-        text = text,
-        style = TextStyle(
-            color = color,
-            fontSize = if (emphasize || imminent) 13.sp else 11.sp,
-            fontWeight = if (imminent || warn) FontWeight.Bold else FontWeight.Normal
-        )
-    )
-}
-
-@Composable
-private fun MeterGlanceRow(
-    row: WidgetRow.Meter,
-    nowMs: Long,
-    compact: Boolean,
-    tileWidth: Dp
-) {
-    val meter = row.meter
-    val used = meter.usedLabel()
-    val resetSegments = meter.resetsAtEpochMs?.let { NyTime.formatResetSegments(it, nowMs) }
-        ?: meter.resetLabel?.takeIf { it.isNotBlank() }?.let { listOf(ResetSegment(it, emphasized = false)) }
-        ?: emptyList()
-    Column(
-        modifier = GlanceModifier
-            .fillMaxWidth()
-            .padding(bottom = 2.dp)
-    ) {
+private fun MeterGlanceRow(row: WidgetRow.Meter, nowMs: Long, tileWidth: Dp) {
+    Column(modifier = GlanceModifier.fillMaxWidth()) {
         Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = row.title,
-                style = TextStyle(color = TextOn, fontSize = 13.sp, fontWeight = FontWeight.Medium),
+                style = TextStyle(color = TextOn, fontSize = 13.sp),
                 modifier = GlanceModifier.defaultWeight()
             )
-            if (used != null) {
-                Text(
-                    text = used,
-                    style = TextStyle(color = TextOn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                )
-            } else if (row.showReset && resetSegments.isNotEmpty() && !meter.hasUsageBar) {
-                ResetLine(resetSegments, meter.resetsAtEpochMs, nowMs)
-            }
-        }
-        if (meter.hasUsageBar && !compact) {
-            Spacer(GlanceModifier.height(4.dp))
-            GlancePaceBar(meter, nowMs, tileWidth)
-        }
-        if (row.showReset && used != null && resetSegments.isNotEmpty()) {
-            Spacer(GlanceModifier.height(2.dp))
-            ResetLine(resetSegments, meter.resetsAtEpochMs, nowMs)
-        }
-    }
-}
-
-/**
- * Reset line: only the emphasized runs (clock time, duration) get the urgency
- * colour, larger size and bold; "Reset:", the day and parentheses stay plain.
- */
-@Composable
-private fun ResetLine(segments: List<ResetSegment>, resetAtEpochMs: Long?, nowMs: Long) {
-    val urgency = ResetEmphasis.of(resetAtEpochMs, nowMs)
-    Row(verticalAlignment = Alignment.Bottom) {
-        for (segment in segments) {
-            val look = ResetSegmentLook.of(segment.emphasized, urgency)
             Text(
-                text = segment.text,
-                maxLines = 1,
-                style = TextStyle(
-                    color = when (look.urgency) {
-                        ResetUrgency.RELAXED -> TextOn
-                        ResetUrgency.SOON -> Bright
-                        ResetUrgency.NEAR -> Amber
-                        ResetUrgency.IMMINENT -> Imminent
-                    },
-                    fontSize = if (look.enlarged) 13.sp else 12.sp,
-                    fontWeight = if (look.bold) FontWeight.Bold else FontWeight.Normal
-                )
+                text = (if (row.stale) "~" else "") + "${row.meter.displayUsedPercent}%",
+                style = TextStyle(color = if (row.stale) Amber else TextOn, fontSize = 13.sp)
             )
         }
+        Spacer(GlanceModifier.height(2.dp))
+        GlancePaceBar(row.meter, nowMs, tileWidth)
     }
 }
 
@@ -528,7 +316,7 @@ private fun GlancePaceBar(
     val heightPx = (7f * density).toInt().coerceAtLeast(4)
     val used = meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: 0.0
     val expected = if (meter.isCapBar) null else PaceWindows.expectedUsedPercent(meter, nowMs)
-    val bitmap = PaceBarBitmap.render(used, expected, widthPx, heightPx, capBar = meter.isCapBar)
+    val bitmap = PaceBarBitmap.render(used, expected, widthPx, heightPx, meter)
     Image(
         provider = ImageProvider(bitmap),
         contentDescription = meter.usedLabel() ?: "usage",

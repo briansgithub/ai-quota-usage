@@ -420,7 +420,7 @@ fun MeterRow(meter: UsageMeter, nowMs: Long = System.currentTimeMillis(), stale:
 fun UsageBar(meter: UsageMeter, nowMs: Long) {
     val used = (meter.usedPercent ?: meter.displayUsedPercent?.toDouble() ?: 0.0).coerceIn(0.0, 100.0)
     val expected = if (meter.isCapBar) null else PaceWindows.expectedUsedPercent(meter, nowMs)
-    val fill = if (meter.isCapBar) UsedGradient.capFill(used) else UsedGradient.fill(used, expected)
+    val fill = UsedGradient.meterFill(meter, used, expected)
     val fillColor = Color(red = fill.r / 255f, green = fill.g / 255f, blue = fill.b / 255f)
     BoxWithConstraints(
         modifier = Modifier

@@ -23,10 +23,20 @@ object UsedGradient {
     val GREEN = Rgb8(46, 176, 92)
     val DARK_OUTLINE = Rgb8(16, 16, 18)
 
+    fun meterFill(meter: UsageMeter, used: Double, expected: Double?): Rgb8 = when {
+        meter.isCapBar -> capFill(used)
+        LimitGrouping.classify(meter) != LimitKind.SHORT -> fill(used, expected)
+        expected == null -> MID
+        else -> paceColor(expected - used)
+    }
+
     fun fill(usedPercent: Double, expectedUsedPercent: Double?): Rgb8 {
         if (usedPercent >= 100) return GREEN
         if (expectedUsedPercent == null) return MID
-        val delta = usedPercent - expectedUsedPercent
+        return paceColor(usedPercent - expectedUsedPercent)
+    }
+
+    private fun paceColor(delta: Double): Rgb8 {
         val t = (delta / SATURATE_DELTA).coerceIn(-1.0, 1.0)
         return if (t < 0) lerp(MID, RED, -t) else lerp(MID, GREEN, t)
     }
@@ -46,7 +56,7 @@ object UsedGradient {
 
     fun capOutline(usedPercent: Double): Rgb8 = outlineOf(capFill(usedPercent))
 
-    private fun outlineOf(fill: Rgb8): Rgb8 {
+    fun outlineOf(fill: Rgb8): Rgb8 {
         val lum = 0.299 * fill.r + 0.587 * fill.g + 0.114 * fill.b
         if (lum >= 140) return DARK_OUTLINE
         return Rgb8(
