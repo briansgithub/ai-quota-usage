@@ -66,7 +66,7 @@ object SnapshotMerger {
                 planLabel = snap?.planLabel,
                 signedIn = round.signedIn || attempt.outcomeEnum == FetchOutcome.AUTH_EXPIRED,
                 manualResets = when (section) {
-                    SoftwareSectionId.CODEX, SoftwareSectionId.CURSOR -> snap?.manualResets
+                    SoftwareSectionId.CODEX, SoftwareSectionId.CURSOR, SoftwareSectionId.CLAUDE -> snap?.manualResets
                     else -> null
                 },
                 diagnosticJson = if (section == SoftwareSectionId.GROK_BOT) null else snap?.diagnosticJson

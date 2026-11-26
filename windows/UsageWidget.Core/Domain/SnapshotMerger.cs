@@ -58,7 +58,7 @@ public static class SnapshotMerger
             var snap = SnapshotOf(round.Result);
             var incoming = MeterIds.ForSection(section, metersThisRound[round.Provider]);
             var signedIn = round.SignedIn || attempt.OutcomeEnum == FetchOutcome.AuthExpired;
-            var incomingManual = section is SoftwareSectionId.Codex or SoftwareSectionId.Cursor ? snap?.ManualResets : null;
+            var incomingManual = section is SoftwareSectionId.Codex or SoftwareSectionId.Cursor or SoftwareSectionId.Claude ? snap?.ManualResets : null;
             var incomingDiag = section is SoftwareSectionId.GrokBot ? null : snap?.DiagnosticJson;
             health[section.Wire()] = ApplyAttempt(health[section.Wire()], attempt, incoming, snap?.PlanLabel, signedIn, incomingManual, incomingDiag);
         }

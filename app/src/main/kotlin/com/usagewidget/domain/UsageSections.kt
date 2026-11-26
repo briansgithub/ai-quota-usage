@@ -241,7 +241,8 @@ object UsageSections {
             error = stale.shortReason ?: claude?.error,
             meters = meters,
             health = health,
-            stale = stale
+            stale = stale,
+            manualResets = claude?.manualResets ?: health.lastGoodManualResets
         )
     }
 

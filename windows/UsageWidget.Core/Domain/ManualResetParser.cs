@@ -27,6 +27,40 @@ public static class ManualResetParser
         return result.AvailableCount > 0 || result.CreditList.Count > 0 || observed is not null ? result : null;
     }
 
+    /// <summary>
+    /// claude.ai full limit resets: <c>cedar_ember.grants[]</c> on
+    /// <c>/usage?cedar_ember=1</c>, each <c>{ type: "full", resets_left, ends_at, paused }</c>.
+    /// One credit per remaining reset, expiring at the grant's <c>ends_at</c>.
+    /// </summary>
+    public static ManualResets? FromClaudeRoot(JsonObject root, long fetchedAtMs)
+    {
+        var block = root.Obj("cedar_ember", "cedarEmber");
+        if (block is null) return null;
+        var credits = new List<ManualResetCredit>();
+        var observedGrants = new JsonArray();
+        foreach (var grant in (block["grants"] as JsonArray ?? new JsonArray()).OfType<JsonObject>())
+        {
+            var type = grant.Str("type");
+            if (type is not null && !type.Equals("full", StringComparison.OrdinalIgnoreCase)) continue;
+            var left = (int)Math.Max(0, grant.Long("resets_left", "resetsLeft") ?? 0);
+            var ends = NyTime.ParseTimestamp(grant.Str("ends_at", "endsAt") ?? (object?)grant.Num("ends_at", "endsAt"), fetchedAtMs);
+            var paused = grant.Bool("paused") == true;
+            var expired = ends is { } e && e <= fetchedAtMs;
+            var status = paused ? "paused" : expired ? "expired" : "available";
+            for (var i = 0; i < left; i++)
+                credits.Add(new ManualResetCredit(ends, status, grant.Str("label") ?? "Full reset", "full"));
+            observedGrants.Add(new JsonObject
+            {
+                ["type"] = type,
+                ["resets_left"] = left,
+                ["ends_at"] = grant.Str("ends_at", "endsAt"),
+                ["paused"] = paused
+            });
+        }
+        var observed = new JsonObject { ["cedar_ember"] = new JsonObject { ["grants"] = observedGrants } }.ToJsonString();
+        return new ManualResets(credits.Count(c => c.IsAvailable), credits, observed);
+    }
+
     public static ManualResets? MergeDetails(ManualResets? existing, string? detailsRaw, long fetchedAtMs)
     {
         if (string.IsNullOrWhiteSpace(detailsRaw)) return existing;

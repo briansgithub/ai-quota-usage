@@ -3,6 +3,7 @@ package com.usagewidget.providers.claude
 import com.usagewidget.auth.SecureCookieStore
 import com.usagewidget.domain.FetchAttempt
 import com.usagewidget.domain.FetchOutcome
+import com.usagewidget.domain.ManualResetParser
 import com.usagewidget.domain.Percent
 import com.usagewidget.domain.ProviderId
 import com.usagewidget.domain.ProviderResult
@@ -44,8 +45,9 @@ object ClaudeEndpoints {
     const val LAST_ACTIVE_ORG_COOKIE = "lastActiveOrg"
     val cookieHosts = listOf("claude.ai")
 
+    /** `cedar_ember=1` adds the full-limit-reset grants the usage page shows. */
     fun usage(orgId: String): String =
-        "https://claude.ai/api/organizations/${URLEncoder.encode(orgId, "UTF-8")}/usage"
+        "https://claude.ai/api/organizations/${URLEncoder.encode(orgId, "UTF-8")}/usage?cedar_ember=1"
 }
 
 object ClaudeMeterIds {
@@ -97,6 +99,7 @@ object ClaudeUsageParser {
             status = ProviderStatus.OK.name,
             source = source,
             meters = meters,
+            manualResets = ManualResetParser.fromClaudeRoot(root, fetchedAtMs),
             diagnosticJson = UsageDump.claudePayload(usageRaw)
         )
     }

@@ -293,7 +293,7 @@ object PacingPlanner {
                     fiveHourResetEpochMs = five?.resetsAtEpochMs,
                     nowMs = nowMs,
                     percentPerWindow = percentPerWindow,
-                    manuals = emptyList(),
+                    manuals = section.manualResets?.credits.orEmpty(),
                     sectionId = section.id.wireName
                 )
             }

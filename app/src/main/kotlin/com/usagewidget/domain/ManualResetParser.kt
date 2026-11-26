@@ -2,6 +2,7 @@ package com.usagewidget.domain
 
 import com.usagewidget.util.JsonNav
 import com.usagewidget.util.NyTime
+import com.usagewidget.util.bool
 import com.usagewidget.util.long
 import com.usagewidget.util.num
 import com.usagewidget.util.obj
@@ -47,6 +48,46 @@ object ManualResetParser {
             credits = credits,
             observedJson = observed
         ).takeIf { it.availableCount > 0 || it.credits.isNotEmpty() || observed != null }
+    }
+
+    /**
+     * claude.ai full limit resets: `cedar_ember.grants[]` on `/usage?cedar_ember=1`, each
+     * `{ type: "full", resets_left, ends_at, paused }`. One credit per remaining reset,
+     * expiring at the grant's `ends_at`.
+     */
+    fun fromClaudeRoot(root: JsonObject, fetchedAtMs: Long): ManualResets? {
+        val block = root.obj("cedar_ember", "cedarEmber") ?: return null
+        val credits = mutableListOf<ManualResetCredit>()
+        val observedGrants = buildJsonArray {
+            JsonNav.arr(block["grants"]).orEmpty().forEach { el ->
+                val grant = JsonNav.obj(el) ?: return@forEach
+                val type = grant.str("type")
+                if (type != null && !type.equals("full", ignoreCase = true)) return@forEach
+                val left = (grant.long("resets_left", "resetsLeft") ?: 0L).coerceAtLeast(0L).toInt()
+                val endsRaw = grant.str("ends_at", "endsAt")
+                val ends = NyTime.parseTimestamp(endsRaw ?: grant.num("ends_at", "endsAt"), fetchedAtMs)
+                val paused = grant.bool("paused") == true
+                val expired = ends != null && ends <= fetchedAtMs
+                val status = when {
+                    paused -> "paused"
+                    expired -> "expired"
+                    else -> "available"
+                }
+                repeat(left) {
+                    credits += ManualResetCredit(ends, status, grant.str("label") ?: "Full reset", "full")
+                }
+                add(buildJsonObject {
+                    put("type", JsonPrimitive(type))
+                    put("resets_left", JsonPrimitive(left))
+                    put("ends_at", JsonPrimitive(endsRaw))
+                    put("paused", JsonPrimitive(paused))
+                })
+            }
+        }
+        val observed = buildJsonObject {
+            put("cedar_ember", buildJsonObject { put("grants", observedGrants) })
+        }.toString()
+        return ManualResets(credits.count { it.isAvailable }, credits, observed)
     }
 
     fun mergeDetails(existing: ManualResets?, detailsRaw: String?, fetchedAtMs: Long): ManualResets? {

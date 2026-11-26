@@ -217,7 +217,8 @@ public static class UsageSections
             stale.ShortReason ?? claude?.Error,
             meters,
             health,
-            stale);
+            stale,
+            claude?.ManualResets ?? health.LastGoodManualResets);
     }
 
     private static string? WithoutGrokError(string? error) =>

@@ -20,7 +20,8 @@ public static class ClaudeEndpoints
     public const string LastActiveOrgCookie = "lastActiveOrg";
     public static readonly string[] CookieHosts = { "claude.ai" };
 
-    public static string Usage(string orgId) => $"https://claude.ai/api/organizations/{Uri.EscapeDataString(orgId)}/usage";
+    /// <summary><c>cedar_ember=1</c> adds the full-limit-reset grants the usage page shows.</summary>
+    public static string Usage(string orgId) => $"https://claude.ai/api/organizations/{Uri.EscapeDataString(orgId)}/usage?cedar_ember=1";
 }
 
 public static class ClaudeMeterIds
@@ -72,7 +73,7 @@ public static class ClaudeUsageParser
             throw new ArgumentException("claude.ai usage is missing five_hour and seven_day");
         return new ProviderSnapshot(
             ProviderId.Claude.Wire(), ProviderId.Claude.DisplayName(), "OK", null, source, null,
-            meters, null, UsageDump.ClaudePayload(usageRaw));
+            meters, ManualResetParser.FromClaudeRoot(root, fetchedAtMs), UsageDump.ClaudePayload(usageRaw));
     }
 
     public static long RoundToMinute(long ms) => (ms + 30_000L) / 60_000L * 60_000L;
