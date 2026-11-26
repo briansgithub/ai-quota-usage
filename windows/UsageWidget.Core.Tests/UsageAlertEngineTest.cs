@@ -18,6 +18,7 @@ public class UsageAlertEngineTest
         var first = UsageAlertEngine.Evaluate(previous, current, Now, Prefs, Array.Empty<string>());
         Assert.Equal(1, first.Alerts.Count(a => a.Channel == AlertChannel.Restored));
         Assert.Contains("5-hour", first.Alerts.First(a => a.Channel == AlertChannel.Restored).Title);
+        Assert.Contains("(0% used)", first.Alerts.First(a => a.Channel == AlertChannel.Restored).Body);
         var second = UsageAlertEngine.Evaluate(previous, current, Now, Prefs, first.NewSeenKeys);
         Assert.DoesNotContain(second.Alerts, a => a.Channel == AlertChannel.Restored);
     }

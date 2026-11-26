@@ -212,7 +212,7 @@ object UsageAlertEngine {
             alerts += alert(
                 channel = AlertChannel.PACING,
                 title = "$name usage is ahead of the clock",
-                body = "${result.wasteGap.roundToInt()}% more remaining than even pace — on track to leave usage unused.",
+                body = "${result.wasteGap.roundToInt()}% less used than even pace — on track to leave usage unused.",
                 key = "pace-weekly:${result.sectionId}:${result.weeklyResetEpochMs}"
             )
         }

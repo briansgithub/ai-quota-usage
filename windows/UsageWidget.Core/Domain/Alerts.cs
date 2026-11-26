@@ -303,7 +303,7 @@ public static class UsageAlertEngine
         if (prefs.NotifyPacingReminders && result.Kind == PaceKind.WeeklyOnly && result.ShouldWarnUnused)
         {
             yield return Alert(AlertChannel.Pacing, $"{name} usage is ahead of the clock",
-                $"{(int)Math.Round(result.WasteGap, MidpointRounding.AwayFromZero)}% more remaining than even pace — on track to leave usage unused.",
+                $"{(int)Math.Round(result.WasteGap, MidpointRounding.AwayFromZero)}% less used than even pace — on track to leave usage unused.",
                 $"pace-weekly:{result.SectionId}:{result.WeeklyResetEpochMs}");
         }
 
