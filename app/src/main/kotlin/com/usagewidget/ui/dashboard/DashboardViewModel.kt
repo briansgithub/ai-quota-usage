@@ -127,6 +127,11 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         pushWidget()
     }
 
+    fun setGroupByLimit(enabled: Boolean) {
+        repo.settings().groupByLimit = enabled
+        pushWidget()
+    }
+
     fun setShowCursorOnDemand(enabled: Boolean) {
         repo.settings().showCursorOnDemand = enabled
         pushWidget()

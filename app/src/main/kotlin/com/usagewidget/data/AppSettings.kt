@@ -205,6 +205,14 @@ class AppSettings private constructor(context: Context) {
             publishDisplay()
         }
 
+    /** Widget only: group bars by limit length, then by software (see [com.usagewidget.domain.LimitGrouping]). */
+    var groupByLimit: Boolean
+        get() = prefs.getBoolean(KEY_GROUP_BY_LIMIT, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_GROUP_BY_LIMIT, value).apply()
+            publishDisplay()
+        }
+
     val hiddenWidgetBars: Set<String>
         get() = prefs.getStringSet(KEY_HIDDEN_WIDGET_BARS, emptySet())?.toSet().orEmpty()
 
@@ -308,7 +316,8 @@ class AppSettings private constructor(context: Context) {
         showGrokOnDemand = showGrokOnDemand,
         hiddenWidgetBars = hiddenWidgetBars,
         widgetSectionOrder = widgetSectionOrder,
-        onlyUsageRemaining = onlyUsageRemaining
+        onlyUsageRemaining = onlyUsageRemaining,
+        groupByLimit = groupByLimit
     )
 
     private fun publishDisplay() {
@@ -345,6 +354,7 @@ class AppSettings private constructor(context: Context) {
         private const val KEY_HIDDEN_WIDGET_BARS = "hidden_widget_bars"
         private const val KEY_WIDGET_SECTION_ORDER = "widget_section_order"
         private const val KEY_ONLY_USAGE_REMAINING = "only_usage_remaining"
+        private const val KEY_GROUP_BY_LIMIT = "group_by_limit"
         private const val KEY_QUOTA_CLAUDE_FIVE = "quota_claude_five_hour_enabled"
         private const val KEY_QUOTA_CLAUDE_WEEKLY = "quota_claude_weekly_enabled"
         private const val KEY_QUOTA_STATES = "quota_fired_states"

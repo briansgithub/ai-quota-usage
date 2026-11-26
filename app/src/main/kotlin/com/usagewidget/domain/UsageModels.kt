@@ -23,7 +23,9 @@ data class DisplayPreferences(
     /** Software order on the home-screen widget (see [WidgetBars]). */
     val widgetSectionOrder: List<SoftwareSectionId> = WidgetBars.defaultSectionOrder,
     /** Hide bars with no quota left, in the app and on the widget (see [UsageRemaining]). */
-    val onlyUsageRemaining: Boolean = false
+    val onlyUsageRemaining: Boolean = false,
+    /** Widget layout: group bars by limit length (5-hr / weekly+monthly), then software (see [LimitGrouping]). */
+    val groupByLimit: Boolean = false
 )
 
 enum class ProviderStatus {
