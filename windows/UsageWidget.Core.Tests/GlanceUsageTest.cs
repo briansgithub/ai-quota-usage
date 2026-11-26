@@ -28,9 +28,40 @@ public class GlanceUsageTest
         }, glance.Lines.Select(l => l.Label).ToArray());
         Assert.Equal(new[] { 17, 65, 40, 12 }, glance.Lines.Select(l => l.UsedPercent).ToArray());
         Assert.True(glance.Lines.All(l => l.ExpectedUsedPercent is null));
+        Assert.True(glance.Lines.All(l => l.GroupTitle is null));
         Assert.Null(glance.EmptyMessage);
         Assert.Contains("17%", GlanceUsage.Tooltip(glance));
         Assert.True(GlanceUsage.Tooltip(glance).Length <= GlanceUsage.TooltipMaxChars);
+    }
+
+    [Fact]
+    public void GroupByLimitOrdersLongBeforeShortAndTagsGroupTitles()
+    {
+        var now = 10L * 24 * 60 * 60 * 1000;
+        var halfWeekReset = now + (7L * 24 * 60 * 60 * 1000) / 2;
+        var halfFiveHrReset = now + (5L * 60 * 60 * 1000) / 2;
+        var snap = Snapshot(
+            cursor: new[]
+            {
+                new UsageMeter("cursor.grok_bot", "Grok Bot", UsedPercent: 80, RemainingPercent: 20, ResetsAtEpochMs: halfWeekReset)
+            },
+            openai: new[]
+            {
+                new UsageMeter("openai.five_hour", "5-hour", UsedPercent: 40, RemainingPercent: 60, ResetsAtEpochMs: halfFiveHrReset),
+                new UsageMeter("openai.weekly", "Weekly", UsedPercent: 20, RemainingPercent: 80, ResetsAtEpochMs: halfWeekReset)
+            });
+        var glance = GlanceUsage.From(snap, now, groupByLimit: true);
+        Assert.Equal(
+            new[] { "Codex Weekly", "Grok Bot", "Codex 5-hour" },
+            glance.Lines.Select(l => l.Label).ToArray());
+        Assert.Equal(
+            new[]
+            {
+                LimitKind.Long.Title(),
+                LimitKind.Long.Title(),
+                LimitKind.Short.Title()
+            },
+            glance.Lines.Select(l => l.GroupTitle).ToArray());
     }
 
     [Fact]

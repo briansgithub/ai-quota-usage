@@ -66,6 +66,13 @@ public sealed class AppSettings
     public bool ShowCursorOnDemand { get => _state.ShowCursorOnDemand; set => Set(s => s with { ShowCursorOnDemand = value }); }
     public bool ShowGrokOnDemand { get => _state.ShowGrokOnDemand; set => Set(s => s with { ShowGrokOnDemand = value }); }
 
+    /// <summary>Mini panel and tray popup: group bars by limit length, then by software (see <see cref="LimitGrouping"/>).</summary>
+    public bool GroupByLimit
+    {
+        get => _state.GroupByLimit;
+        set { if (_state.GroupByLimit != value) Set(s => s with { GroupByLimit = value }); }
+    }
+
     /// <summary>Meter ids hidden on the mini panel and tray popup (see <see cref="WidgetBars"/>).</summary>
     public IReadOnlySet<string> HiddenWidgetBars =>
         (_state.HiddenWidgetBars ?? new List<string>()).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -198,7 +205,8 @@ public sealed record SettingsState(
     bool ShowGrokOnDemand = true,
     List<string>? HiddenWidgetBars = null,
     bool QuotaGeminiEnabled = false,
-    List<string>? WidgetSectionOrder = null);
+    List<string>? WidgetSectionOrder = null,
+    bool GroupByLimit = false);
 
 public interface ISettingsStore
 {

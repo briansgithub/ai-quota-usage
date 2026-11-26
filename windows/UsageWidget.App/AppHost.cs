@@ -400,7 +400,7 @@ internal sealed class AppHost : IDisposable
                 _hoverY = y;
                 _haveHoverPoint = true;
             }
-            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars, Settings.WidgetSectionOrder);
+            var model = GlanceUsage.From(_repo.Snapshot, Now(), Settings.ShowCursorOnDemand, Settings.ShowGrokOnDemand, Settings.HiddenWidgetBars, Settings.WidgetSectionOrder, Settings.GroupByLimit);
             var wasHidden = !_glance!.IsVisible;
             if (!SameGlance(_shownGlance, model))
             {
@@ -462,7 +462,7 @@ internal sealed class AppHost : IDisposable
         {
             var a = shown.Lines[i];
             var b = next.Lines[i];
-            if (a.Label != b.Label || a.UsedPercent != b.UsedPercent || a.IsCapBar != b.IsCapBar)
+            if (a.Label != b.Label || a.UsedPercent != b.UsedPercent || a.IsCapBar != b.IsCapBar || a.GroupTitle != b.GroupTitle)
                 return false;
             if (a.ExpectedUsedPercent is null != b.ExpectedUsedPercent is null)
                 return false;

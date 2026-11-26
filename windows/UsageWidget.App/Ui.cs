@@ -214,70 +214,80 @@ internal static class Ui
         bool compact,
         Action<SoftwareSection> onSignIn,
         Action<SoftwareSection>? onSignOut,
-        Action? onRefresh = null)
+        Action? onRefresh = null,
+        IReadOnlyList<UsageMeter>? metersOverride = null,
+        bool primary = true,
+        bool nested = false)
     {
+        var meters = metersOverride ?? section.MeterList;
         var stale = section.StaleValue;
-        var bg = !stale.IsStale ? Theme.SurfaceBrush : Theme.StaleBg(stale.Severity);
+        var bg = primary && stale.IsStale ? Theme.StaleBg(stale.Severity) : Theme.SurfaceBrush;
         var headerColor = stale.IsStale ? Theme.StaleBrush(stale.Severity) : Theme.TextBrush;
         var card = new Border
         {
             Background = bg,
             CornerRadius = new CornerRadius(compact ? 10 : 14),
-            Padding = new Thickness(compact ? 8 : 14),
-            Margin = new Thickness(0, 0, 0, compact ? 6 : 12),
+            Padding = compact ? (nested ? new Thickness(8, 6, 8, 6) : new Thickness(8)) : new Thickness(14),
+            Margin = new Thickness(0, 0, 0, compact ? (nested ? 5 : 6) : 12),
             BorderBrush = Theme.OutlineBrush,
             BorderThickness = new Thickness(1)
         };
         var stack = new StackPanel();
-        stack.Children.Add(T(section.Id.Title(), headerColor, compact ? 15 : 22, FontWeights.SemiBold));
-        var authColor = section.Status is ProviderStatus.NeedsSignIn ? Theme.ImminentBrush
-            : section.Status is ProviderStatus.Unsigned ? Theme.MutedBrush
-            : Theme.MutedBrush;
-        stack.Children.Add(T(AuthCopy.StatusLine(section), authColor, compact ? 10.5 : 12, FontWeights.Medium));
-        if (!string.IsNullOrWhiteSpace(section.Subtitle) && !stale.IsStale && section.Status is not ProviderStatus.Unsigned and not ProviderStatus.NeedsSignIn)
-            stack.Children.Add(T(section.Subtitle!, Theme.MutedBrush, compact ? 10 : 12));
-        if (stale.IsStale)
+        stack.Children.Add(T(section.Id.Title(), headerColor, compact ? (nested ? 13 : 15) : 22, FontWeights.SemiBold));
+        if (primary)
         {
-            var line = string.Join(" · ", new[] { stale.LastUpdatedLine, stale.ShortReason }.Where(s => !string.IsNullOrWhiteSpace(s)));
-            stack.Children.Add(T(line, headerColor, compact ? 10 : 12));
+            var authColor = section.Status is ProviderStatus.NeedsSignIn ? Theme.ImminentBrush
+                : section.Status is ProviderStatus.Unsigned ? Theme.MutedBrush
+                : Theme.MutedBrush;
+            stack.Children.Add(T(AuthCopy.StatusLine(section), authColor, compact ? 10.5 : 12, FontWeights.Medium));
+            if (!string.IsNullOrWhiteSpace(section.Subtitle) && !stale.IsStale && section.Status is not ProviderStatus.Unsigned and not ProviderStatus.NeedsSignIn)
+                stack.Children.Add(T(section.Subtitle!, Theme.MutedBrush, compact ? 10 : 12));
+            if (stale.IsStale)
+            {
+                var line = string.Join(" · ", new[] { stale.LastUpdatedLine, stale.ShortReason }.Where(s => !string.IsNullOrWhiteSpace(s)));
+                stack.Children.Add(T(line, headerColor, compact ? 10 : 12));
+            }
         }
-        var hasData = section.MeterList.Any(m => m.HasUsageBar || m.ResetsAtEpochMs != null);
-        if (hasData)
+        var hasData = meters.Any(m => m.HasUsageBar || m.ResetsAtEpochMs != null);
+        if (hasData || (!primary && meters.Count > 0))
         {
-            foreach (var meter in section.MeterList)
+            foreach (var meter in meters)
                 stack.Children.Add(MeterBlock(meter, nowMs, compact, stale.IsStale));
         }
-        var manuals = section.ManualResets?.DisplayLine();
-        if (!string.IsNullOrWhiteSpace(manuals))
-            stack.Children.Add(T(manuals, Theme.TextBrush, compact ? 11 : 13));
-        var pacing = PacingPlanner.ForSection(section, nowMs, percentPerWindow);
-        if (pacing is not null)
+        if (primary)
         {
-            stack.Children.Add(T(pacing.Line, Theme.PaceBrush(pacing.Urgency), compact ? 11 : 13, FontWeights.Medium));
-            foreach (var warning in pacing.ManualList.Select(m => m.Warning).Where(w => w is not null))
-                stack.Children.Add(T(warning!, Theme.ImminentBrush, compact ? 10 : 12));
-        }
+            var manuals = section.ManualResets?.DisplayLine();
+            if (!string.IsNullOrWhiteSpace(manuals))
+                stack.Children.Add(T(manuals, Theme.TextBrush, compact ? 11 : 13));
+            var pacing = PacingPlanner.ForSection(section, nowMs, percentPerWindow);
+            if (pacing is not null)
+            {
+                stack.Children.Add(T(pacing.Line, Theme.PaceBrush(pacing.Urgency), compact ? 11 : 13, FontWeights.Medium));
+                foreach (var warning in pacing.ManualList.Select(m => m.Warning).Where(w => w is not null))
+                    stack.Children.Add(T(warning!, Theme.ImminentBrush, compact ? 10 : 12));
+            }
 
-        if (section.Status is ProviderStatus.Unsigned or ProviderStatus.NeedsSignIn)
-        {
-            if (!hasData && !compact)
-                stack.Children.Add(T(section.Error ?? "Sign in. The app never sees your password.", Theme.MutedBrush, 13));
-        }
-        else if (section.Status == ProviderStatus.Error && !hasData)
-        {
-            stack.Children.Add(T(section.Error ?? "Could not load usage.", Theme.BarWarnBrush, compact ? 11 : 13));
-        }
-        else if (section.Status == ProviderStatus.Ok && !string.IsNullOrWhiteSpace(section.Error) && !stale.IsStale && !compact)
-        {
-            stack.Children.Add(T(section.Error!, Theme.BarWarnBrush, 12));
-        }
+            if (section.Status is ProviderStatus.Unsigned or ProviderStatus.NeedsSignIn)
+            {
+                if (!hasData && !compact)
+                    stack.Children.Add(T(section.Error ?? "Sign in. The app never sees your password.", Theme.MutedBrush, 13));
+            }
+            else if (section.Status == ProviderStatus.Error && !hasData)
+            {
+                stack.Children.Add(T(section.Error ?? "Could not load usage.", Theme.BarWarnBrush, compact ? 11 : 13));
+            }
+            else if (section.Status == ProviderStatus.Ok && !string.IsNullOrWhiteSpace(section.Error) && !stale.IsStale && !compact)
+            {
+                stack.Children.Add(T(section.Error!, Theme.BarWarnBrush, 12));
+            }
 
-        var buttons = new WrapPanel { Margin = new Thickness(0, compact ? 6 : 8, 0, 0) };
-        if (AuthCopy.ShowSignIn(section))
-            buttons.Children.Add(Primary(AuthCopy.SignInButton(section.Status), (_, _) => onSignIn(section)));
-        if (AuthCopy.ShowRetry(section) && onRefresh is not null)
-            buttons.Children.Add(Ghost("Retry", (_, _) => onRefresh()));
-        if (buttons.Children.Count > 0) stack.Children.Add(buttons);
+            var buttons = new WrapPanel { Margin = new Thickness(0, compact ? 6 : 8, 0, 0) };
+            if (AuthCopy.ShowSignIn(section))
+                buttons.Children.Add(Primary(AuthCopy.SignInButton(section.Status), (_, _) => onSignIn(section)));
+            if (AuthCopy.ShowRetry(section) && onRefresh is not null)
+                buttons.Children.Add(Ghost("Retry", (_, _) => onRefresh()));
+            if (buttons.Children.Count > 0) stack.Children.Add(buttons);
+        }
 
         var menu = new ContextMenu();
         if (AuthCopy.ShowSignIn(section))
@@ -746,8 +756,35 @@ internal sealed class MiniPanelWindow : Window
             });
         }
         var shown = OnDemandDisplay.Apply(UsageSections.From(snapshot, nowMs), _host.Settings.ShowCursorOnDemand, _host.Settings.ShowGrokOnDemand);
-        foreach (var section in WidgetBars.Apply(shown, _host.Settings.HiddenWidgetBars, _host.Settings.WidgetSectionOrder))
-            _body.Children.Add(Ui.SectionCard(section, nowMs, _host.Settings.PercentPerFiveHourWindow, compact: true, _host.OpenSignIn, _host.SignOutSection, () => _ = _host.RefreshNow()));
+        var filtered = WidgetBars.Apply(shown, _host.Settings.HiddenWidgetBars, _host.Settings.WidgetSectionOrder);
+        if (_host.Settings.GroupByLimit)
+        {
+            var groups = LimitGrouping.Group(filtered, nowMs);
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var group = groups[i];
+                var heading = Ui.T(group.Kind.Title(), Theme.BrightBrush, 13.5, FontWeights.Bold);
+                heading.Margin = new Thickness(2, i > 0 ? 6 : 0, 0, 4);
+                _body.Children.Add(heading);
+                foreach (var entry in group.Entries)
+                    _body.Children.Add(Ui.SectionCard(
+                        entry.Section,
+                        nowMs,
+                        _host.Settings.PercentPerFiveHourWindow,
+                        compact: true,
+                        _host.OpenSignIn,
+                        _host.SignOutSection,
+                        () => _ = _host.RefreshNow(),
+                        metersOverride: entry.Meters,
+                        primary: entry.Primary,
+                        nested: true));
+            }
+        }
+        else
+        {
+            foreach (var section in filtered)
+                _body.Children.Add(Ui.SectionCard(section, nowMs, _host.Settings.PercentPerFiveHourWindow, compact: true, _host.OpenSignIn, _host.SignOutSection, () => _ = _host.RefreshNow()));
+        }
         if (_body.Children.Count > 0 && _body.Children[^1] is FrameworkElement last)
             last.Margin = new Thickness(last.Margin.Left, last.Margin.Top, last.Margin.Right, 0);
         ApplyScale();
@@ -760,6 +797,7 @@ internal sealed class DashboardWindow : Window
     private readonly StackPanel _body;
     private readonly TextBlock _status;
     private CheckBox? _alwaysOnTopCheck;
+    private CheckBox? _groupByLimitCheck;
     private CheckBox? _showCursorOnDemand;
     private CheckBox? _showGrokOnDemand;
 
@@ -880,6 +918,8 @@ internal sealed class DashboardWindow : Window
         stack.Children.Add(_showGrokOnDemand);
         _alwaysOnTopCheck = Ui.Check("Always on top (mini panel)", s.AlwaysOnTop, v => _host.SetAlwaysOnTop(v));
         stack.Children.Add(_alwaysOnTopCheck);
+        _groupByLimitCheck = Ui.Check("Group by limit length (mini panel & tray)", s.GroupByLimit, v => s.GroupByLimit = v);
+        stack.Children.Add(_groupByLimitCheck);
         stack.Children.Add(Ui.Check("Start with Windows", s.StartWithWindows || StartupManager.IsEnabled(), v => { s.StartWithWindows = v; StartupManager.SetEnabled(v); }));
         stack.Children.Add(Ui.Check("Notify when usage is back", s.NotifyUsageRestored, v => s.NotifyUsageRestored = v));
         stack.Children.Add(Ui.Check("Pacing reminders (start a session)", s.NotifyPacingReminders, v => s.NotifyPacingReminders = v));
@@ -932,6 +972,8 @@ internal sealed class DashboardWindow : Window
             _showCursorOnDemand.IsChecked = _host.Settings.ShowCursorOnDemand;
         if (_showGrokOnDemand is not null && _showGrokOnDemand.IsChecked != _host.Settings.ShowGrokOnDemand)
             _showGrokOnDemand.IsChecked = _host.Settings.ShowGrokOnDemand;
+        if (_groupByLimitCheck is not null && _groupByLimitCheck.IsChecked != _host.Settings.GroupByLimit)
+            _groupByLimitCheck.IsChecked = _host.Settings.GroupByLimit;
     }
 }
 
@@ -943,6 +985,7 @@ internal sealed class OnDemandSettingsWindow : Window
     private static readonly Brush PillOnHoverBrush = Frozen(Color.FromRgb(0x25, 0x47, 0x63));
     private static readonly Brush PillOffHoverBrush = Frozen(Color.FromRgb(0x22, 0x22, 0x22));
     private const string EyeGlyph = "\uE890";
+    private const string CheckGlyph = "\uE73E";
     private const string ChevronUpGlyph = "\uE70E";
     private const string ChevronDownGlyph = "\uE70D";
 
@@ -993,6 +1036,15 @@ internal sealed class OnDemandSettingsWindow : Window
         spend.Children.Add(Pill("Cursor", _settings.ShowCursorOnDemand, true, v => _settings.ShowCursorOnDemand = v));
         spend.Children.Add(Pill("Grok Bot", _settings.ShowGrokOnDemand, true, v => _settings.ShowGrokOnDemand = v));
         _body.Children.Add(spend);
+
+        var layoutHeader = SectionHeader(
+            "WIDGET LAYOUT",
+            "Off: bars grouped by software. On: weekly / monthly limits first, then 5-hour; inside, software and bars behind even pace come first. Mini panel and tray popup only.");
+        layoutHeader.Margin = new Thickness(0, 10, 0, 6);
+        _body.Children.Add(layoutHeader);
+        var layout = PillRow();
+        layout.Children.Add(TogglePill("Group by limit length", _settings.GroupByLimit, v => _settings.GroupByLimit = v));
+        _body.Children.Add(layout);
 
         var widgetHeader = SectionHeader("WIDGET BARS", "Click a bar to show or hide it on the mini panel and tray popup. Use arrows to reorder software.");
         widgetHeader.Margin = new Thickness(0, 10, 0, 6);
@@ -1110,6 +1162,72 @@ internal sealed class OnDemandSettingsWindow : Window
     }
 
     private static WrapPanel PillRow() => new() { Orientation = Orientation.Horizontal };
+
+    private ToggleButton TogglePill(string label, bool isOn, Action<bool> onChange)
+    {
+        var glyph = new Grid { Width = 13, Height = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 1, 6, 0) };
+        if (isOn)
+        {
+            glyph.Children.Add(new TextBlock
+            {
+                Text = CheckGlyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 11,
+                Foreground = Theme.BarBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+        }
+        else
+        {
+            glyph.Children.Add(new Ellipse
+            {
+                Width = 9,
+                Height = 9,
+                Stroke = Theme.MutedBrush,
+                StrokeThickness = 1.2,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+        }
+        var text = Ui.T(label, isOn ? Theme.TextBrush : Theme.MutedBrush, 12.5, FontWeights.Medium, TextWrapping.NoWrap);
+        text.VerticalAlignment = VerticalAlignment.Center;
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(glyph);
+        content.Children.Add(text);
+
+        var pill = new ToggleButton
+        {
+            IsChecked = isOn,
+            Content = content,
+            Background = isOn ? PillOnBrush : Brushes.Transparent,
+            BorderBrush = isOn ? Brushes.Transparent : Theme.OutlineBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(9, 5, 11, 5),
+            Margin = new Thickness(0, 0, 6, 6),
+            Cursor = Cursors.Hand,
+            ToolTip = isOn ? "On. Click to turn off." : "Off. Click to turn on."
+        };
+        System.Windows.Automation.AutomationProperties.SetName(pill, label);
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Control.BorderBrushProperty));
+        border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Control.BorderThicknessProperty));
+        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(7));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter);
+        pill.Template = new ControlTemplate(typeof(ToggleButton)) { VisualTree = border };
+        pill.MouseEnter += (_, _) => pill.Background = isOn ? PillOnHoverBrush : PillOffHoverBrush;
+        pill.MouseLeave += (_, _) => pill.Background = isOn ? PillOnBrush : Brushes.Transparent;
+        pill.Click += (_, _) =>
+        {
+            onChange(!isOn);
+            Dispatcher.BeginInvoke(Rebuild);
+        };
+        return pill;
+    }
 
     /// <summary>
     /// Show/hide pill: eye = shown, slashed eye = hidden; same width either way so the row
